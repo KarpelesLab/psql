@@ -2,6 +2,7 @@ package psql
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"reflect"
 	"strings"
@@ -138,4 +139,21 @@ func (f *structField) defString() string {
 	}
 
 	return mydef
+}
+
+func (f *structField) matches(typ, null string, col, dflt *string) (bool, error) {
+	if f.attrs == nil {
+		return false, errors.New("no valid field defined")
+	}
+
+	if f.sqlType() != typ {
+		return false, nil
+	}
+
+	if mycol, ok := f.attrs["collation"]; ok && col != nil && mycol != *col {
+		// bad collation → alter
+		return false, nil
+	}
+
+	return true, nil
 }

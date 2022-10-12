@@ -1,7 +1,6 @@
 package psql
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -14,7 +13,7 @@ func (t *TableMeta) checkStructure() error {
 	// SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_NAME` = '.$this->quote($table_name).' AND `CONSTRAINT_TYPE` = \'FOREIGN KEY\'
 
 	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
-	res, err := db.Query(fmt.Sprintf("SHOW FULL FIELDS FROM `%s`", t.table))
+	res, err := db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
@@ -86,21 +85,4 @@ func (t *TableMeta) createTable() error {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}
 	return nil
-}
-
-func (f *structField) matches(typ, null string, col, dflt *string) (bool, error) {
-	if f.attrs == nil {
-		return false, errors.New("no valid field defined")
-	}
-
-	if f.sqlType() != typ {
-		return false, nil
-	}
-
-	if mycol, ok := f.attrs["collation"]; ok && col != nil && mycol != *col {
-		// bad collation → alter
-		return false, nil
-	}
-
-	return true, nil
 }

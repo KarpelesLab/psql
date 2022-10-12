@@ -9,7 +9,7 @@ import (
 
 type TestTable1 struct {
 	Key  uint64
-	Name string `sql:"Name,type=VARCHAR,size=64"`
+	Name string `sql:"Name,type=VARCHAR,size=64,null=0"`
 }
 
 func TestSQL(t *testing.T) {
