@@ -21,11 +21,13 @@ func TestSQL(t *testing.T) {
 		return
 	}
 
+	// Drop table if it exists so we start from a clean state
 	err = psql.Exec("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1"))
 	if err != nil {
 		t.Errorf("Failed to drop table: %s", err)
 	}
 
+	// Insert a value. This will trigger the creation of the table
 	v := &TestTable1{Key: 42, Name: "Hello world"}
 	err = psql.Insert(context.Background(), v)
 	if err != nil {
