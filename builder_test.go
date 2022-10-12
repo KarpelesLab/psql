@@ -19,7 +19,7 @@ func TestBuilder(t *testing.T) {
 		&testV{psql.Q().Select(psql.V("Value")).From("Table"), `SELECT 'Value' FROM "Table"`},
 		&testV{psql.Q().Select("Field").From("Table").Where(&psql.Like{psql.FieldName("Field"), "prefix%"}), `SELECT "Field" FROM "Table" WHERE ("Field" LIKE 'prefix%' ESCAPE '\')`},
 		&testV{psql.Q().Select("Field").From("Table").Where(psql.Equal(psql.FieldName("Field"), []byte{0xff, 0x00, 0xbe, 0xef})), `SELECT "Field" FROM "Table" WHERE ("Field"=x'ff00beef')`},
-		&testV{psql.Q().Select(&psql.Raw{"COUNT(1)"}).From("Table"), `SELECT COUNT(1) FROM "Table"`},
+		&testV{psql.Q().Select(psql.Raw("COUNT(1)")).From("Table"), `SELECT COUNT(1) FROM "Table"`},
 		&testV{psql.Q().Update("Table").Set(&psql.Set{"Col", "Value"}, &psql.Set{"Col2", "Value 2"}).Where(psql.Equal(psql.FieldName("Field"), 42)), `UPDATE "Table" SET "Col"='Value',"Col2"='Value 2' WHERE ("Field"=42)`},
 	}
 

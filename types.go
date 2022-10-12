@@ -23,12 +23,16 @@ func V(v driver.Value) driver.Value {
 	}
 }
 
-type Raw struct {
+type rawValue struct {
 	V string
 }
 
-func (r *Raw) EscapeValue() string {
+func (r *rawValue) EscapeValue() string {
 	return r.V
+}
+
+func Raw(s string) any {
+	return &rawValue{s}
 }
 
 type Set struct {
