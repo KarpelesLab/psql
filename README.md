@@ -9,14 +9,14 @@ Platform SQL code, including object load/save & query builder.
 After defining a structure, you can use it to load/save data from database.
 
 ```go
-type MyObject struct {
+type Table1 struct {
 	Key uint64
-	Name string
+	Name string `sql:"Name,type=VARCHAR,size=64"`
 }
 
 // ...
 
-var obj *MyObject
+var obj *Table1
 err := psql.FetchOne(nil, &obj, map[string]any{"Key": 42}) // this fetches entry with Key=42
 ```
 

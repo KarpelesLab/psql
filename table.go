@@ -55,7 +55,8 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 	}
 
 	info = &TableMeta{
-		typ: typ,
+		typ:   typ,
+		table: FormatTableName(typ.Name()),
 	}
 
 	cnt := typ.NumField()
@@ -132,6 +133,10 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 	}
 
 	return info
+}
+
+func (t *TableMeta) Name() string {
+	return t.table
 }
 
 func (t *TableMeta) FetchOne(ctx context.Context, target interface{}, where map[string]interface{}) error {

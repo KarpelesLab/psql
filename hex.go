@@ -7,6 +7,7 @@ import (
 	"fmt"
 )
 
+// Hex is a binary value stored as hexadecimal in database
 type Hex []byte
 
 func (h *Hex) Scan(src interface{}) error {

@@ -3,7 +3,7 @@ package psql_test
 import (
 	"testing"
 
-	"git.atonline.com/phplatform/mercury/psql"
+	"github.com/KarpelesLab/psql"
 )
 
 type testV struct {

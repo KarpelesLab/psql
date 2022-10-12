@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 )
 
 func (t *TableMeta) checkStructure() error {
-	log.Printf("[psql] Checking structure of table %s", t.table)
 	// SHOW FULL FIELDS FROM `table`
 	// SHOW TABLE STATUS LIKE 'table' (engine)
 	// SHOW INDEX FROM `table`
@@ -16,9 +16,15 @@ func (t *TableMeta) checkStructure() error {
 	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
 	res, err := db.Query(fmt.Sprintf("SHOW FULL FIELDS FROM `%s`", t.table))
 	if err != nil {
+		if IsNotExist(err) {
+			// We simply need to create this table
+			return t.createTable()
+		}
 		return err
 	}
 	defer res.Close()
+
+	log.Printf("[psql] Checking structure of table %s", t.table)
 
 	// index fields by name
 	flds := make(map[string]*structField)
@@ -53,6 +59,31 @@ func (t *TableMeta) checkStructure() error {
 		// field=Log__ typ=char(36) col=latin1_general_ci null=NO key=PRI, dflt=%!s(*string=<nil>) xtra= priv=select,insert,update,references comment=
 		// field=Secure_Key__ typ=char(36) col=latin1_general_ci null=NO key=, dflt=%!s(*string=0xc0000b6420) xtra= priv=select,insert,update,references comment=
 		//log.Printf("field=%s typ=%s col=%s null=%s key=%s, dflt=%s xtra=%s priv=%s comment=%s", field, typ, col, null, key, dflt, xtra, priv, comment)
+	}
+	return nil
+}
+
+func (t *TableMeta) createTable() error {
+	log.Printf("[psql] Creating table %s", t.table)
+
+	// Prepare a CREATE TABLE query
+	s := &strings.Builder{}
+	s.WriteString("CREATE TABLE ")
+	s.WriteString(QuoteName(t.table))
+	s.WriteString(" (")
+
+	for n, field := range t.fields {
+		if n > 0 {
+			s.WriteString(", ")
+		}
+		s.WriteString(field.defString())
+	}
+	// TODO add keys
+	s.WriteString(")")
+
+	_, err := db.Exec(s.String())
+	if err != nil {
+		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}
 	return nil
 }

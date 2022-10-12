@@ -121,7 +121,7 @@ func (f *structField) defString() string {
 		return ""
 	}
 
-	mydef := "`" + f.column + "` " + mytyp
+	mydef := QuoteName(f.column) + " " + mytyp
 
 	if null, ok := f.attrs["null"]; ok {
 		switch null {
