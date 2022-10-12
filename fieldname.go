@@ -1,6 +1,9 @@
 package psql
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// Use " for ANSI SQL, and ` for MySQL's own thing
@@ -8,44 +11,55 @@ const (
 	NameQuoteRune = '"'
 )
 
-type FieldName string
-
-type FullField struct {
-	TableName
-	FieldName
+func F(field ...string) EscapeValueable {
+	switch len(field) {
+	case 1:
+		return fieldName(field[0])
+	case 2:
+		return &fullField{tableName(field[0]), fieldName(field[1])}
+	default:
+		panic(fmt.Sprintf("psql.F() expects only one or two args, got %d", len(field)))
+	}
 }
 
-func (f FieldName) String() string {
+type fieldName string
+
+type fullField struct {
+	tableName
+	fieldName
+}
+
+func (f fieldName) String() string {
 	return string(f)
 }
 
-func (f FieldName) EscapeValue() string {
+func (f fieldName) EscapeValue() string {
 	if f == "*" {
 		// special case
 		return "*"
 	}
-	// we consider table names won't contain dots, if it do use FullField instead of FieldName
+	// we consider table names won't contain dots, if it do use fullField instead of fieldName
 	return NameQuoteChar + strings.Replace(strings.ReplaceAll(string(f), NameQuoteChar, NameQuoteChar+NameQuoteChar), ".", NameQuoteChar+"."+NameQuoteChar, 1) + NameQuoteChar
 }
 
-func (f *FullField) String() string {
+func (f *fullField) String() string {
 	return f.EscapeValue()
 }
 
-func (f *FullField) EscapeValue() string {
-	if f.TableName == "" {
-		return QuoteName(string(f.FieldName))
+func (f *fullField) EscapeValue() string {
+	if f.tableName == "" {
+		return QuoteName(string(f.fieldName))
 	}
-	return NameQuoteChar + strings.ReplaceAll(string(f.TableName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar + "." + NameQuoteChar + strings.ReplaceAll(string(f.FieldName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar
+	return NameQuoteChar + strings.ReplaceAll(string(f.tableName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar + "." + NameQuoteChar + strings.ReplaceAll(string(f.fieldName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar
 }
 
-type TableName string
+type tableName string
 
-func (t TableName) String() string {
+func (t tableName) String() string {
 	return string(t)
 }
 
-func (t TableName) EscapeTable() string {
+func (t tableName) EscapeTable() string {
 	return QuoteName(string(t))
 }
 

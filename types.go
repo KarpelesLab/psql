@@ -43,7 +43,7 @@ func (s *Set) EscapeValue() string {
 	b := &strings.Builder{}
 	switch v := s.K.(type) {
 	case string:
-		b.WriteString(Escape(FieldName(v)))
+		b.WriteString(Escape(fieldName(v)))
 	default:
 		b.WriteString(Escape(s.K))
 	}

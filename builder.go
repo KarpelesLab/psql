@@ -49,7 +49,7 @@ func (q *QueryBuilder) Select(fields ...any) *QueryBuilder {
 			switch v := field.(type) {
 			case string:
 				// consider it to be a field name by default
-				q.Fields = append(q.Fields, FieldName(v))
+				q.Fields = append(q.Fields, fieldName(v))
 			case any:
 				q.Fields = append(q.Fields, v)
 			default:
@@ -109,7 +109,7 @@ func (q *QueryBuilder) Table(table any) *QueryBuilder {
 	case EscapeTableable:
 		q.Tables = append(q.Tables, v)
 	case string:
-		q.Tables = append(q.Tables, TableName(v))
+		q.Tables = append(q.Tables, tableName(v))
 	default:
 		q.errorf("unsupported type %T passed as table", v)
 	}
