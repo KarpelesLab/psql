@@ -11,6 +11,14 @@ const (
 	NameQuoteRune = '"'
 )
 
+// F allows passing a field name to the query builder. It can be used in multiple ways:
+//
+// psql.F("field")
+// psql.F("table.field")
+// psql.F("", "field.with.dots")
+// psql.F("table", "field")
+// psql.F("table.with.dots", "field.with.dots")
+// and more...
 func F(field ...string) EscapeValueable {
 	switch len(field) {
 	case 1:
