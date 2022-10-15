@@ -124,6 +124,8 @@ func (f *structField) defString() string {
 
 	mydef := QuoteName(f.column) + " " + mytyp
 
+	// TODO unsigned
+
 	if null, ok := f.attrs["null"]; ok {
 		switch null {
 		case "0", "false":
@@ -134,8 +136,13 @@ func (f *structField) defString() string {
 			return "" // bad def
 		}
 	}
-
-	// TODO unsigned
+	if def, ok := f.attrs["default"]; ok {
+		if def == "\\N" {
+			mydef += " DEFAULT NULL"
+		} else {
+			mydef += " DEFAULT " + Escape(def)
+		}
+	}
 
 	if mycol, ok := f.attrs["collation"]; ok {
 		mydef += " COLLATE " + mycol

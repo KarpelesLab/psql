@@ -17,7 +17,7 @@ type TestTable1b struct {
 	TableName psql.Name `sql:"Test_Table1"`
 	Key       uint64
 	Name      string `sql:"Name,type=VARCHAR,size=128,null=0"`
-	Status    string `sql:"Status,type=ENUM,values='valid,inactive,zombie',default=valid"`
+	Status    string `sql:"Status,type=ENUM,null=0,values='valid,inactive,zombie,new',default=new"`
 	Created   time.Time
 }
 
@@ -48,5 +48,18 @@ func TestSQL(t *testing.T) {
 	err = psql.Insert(context.Background(), v2)
 	if err != nil {
 		t.Fatalf("failed to insert 2: %s", err)
+	}
+
+	// test values
+	v3 := &TestTable1b{}
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 42})
+	if err != nil {
+		t.Fatalf("failed to fetch 42: %s", err)
+	}
+	if v3.Name != "Hello world" {
+		t.Errorf("Fetch 42: bad name")
+	}
+	if v3.Status != "new" {
+		t.Errorf("Fetch 42: bad status")
 	}
 }
