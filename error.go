@@ -3,6 +3,7 @@ package psql
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -53,20 +54,25 @@ func IsNotExist(err error) bool {
 	case 4031: // Referenced trigger '%s' for the given action time and event type does not exist
 	case 4162: // Operator does not exists: '%-.128s'
 	default:
-		return false
+		// in some cases we replace error with fs.ErrNotExist, check for that too
+		return os.IsNotExist(err)
 	}
 	return true
 }
 
 func ErrorNumber(err error) uint16 {
 	for {
+		if err == nil {
+			// no error
+			return 0
+		}
 		switch e := err.(type) {
 		case *mysql.MySQLError:
 			return e.Number
 		case interface{ Unwrap() error }:
 			err = e.Unwrap()
 		default:
-			// unknown error type
+			// unknown error type, 0xffff can be differenciated from 0
 			return 0xffff
 		}
 	}
