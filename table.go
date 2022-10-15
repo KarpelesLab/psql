@@ -1,11 +1,9 @@
 package psql
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -129,144 +127,6 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 
 func (t *TableMeta) Name() string {
 	return t.table
-}
-
-func (t *TableMeta) FetchOne(ctx context.Context, target interface{}, where map[string]interface{}) error {
-	// grab fields from target
-	val := reflect.ValueOf(target)
-
-	if val.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("target must be a pointer to a struct, got a %T", target))
-	}
-	for val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			// instanciate it
-			val.Set(reflect.New(val.Type().Elem()))
-		}
-		val = val.Elem()
-	}
-
-	typ := val.Type()
-
-	if typ != t.typ {
-		panic("invalid type for query")
-	}
-
-	// SELECT QUERY
-	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []interface{}
-	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			whQ = append(whQ, QuoteName(k)+"=?")
-			params = append(params, v)
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
-	}
-	req += " LIMIT 1"
-
-	// run query
-	rows, err := db.QueryContext(ctx, req, params...)
-	if err != nil {
-		log.Printf("[sql] error: %s", err)
-		return &Error{Query: req, Err: err}
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		// no result
-		return os.ErrNotExist
-	}
-
-	err = t.scanValue(rows, val)
-	return err
-}
-
-func (t *TableMeta) Fetch(ctx context.Context, where map[string]interface{}) ([]interface{}, error) {
-	// SELECT QUERY
-	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []interface{}
-	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			whQ = append(whQ, QuoteName(k)+"=?")
-			params = append(params, v)
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
-	}
-
-	// run query
-	rows, err := db.QueryContext(ctx, req, params...)
-	if err != nil {
-		log.Printf("[sql] error: %s", err)
-		return nil, &Error{Query: req, Err: err}
-	}
-	defer rows.Close()
-
-	var final []interface{}
-
-	for rows.Next() {
-		val := reflect.New(t.typ)
-
-		err = t.scanValue(rows, val.Elem())
-		if err != nil {
-			return nil, err
-		}
-		final = append(final, val.Interface())
-	}
-
-	return final, nil
-}
-
-func (t *TableMeta) Insert(ctx context.Context, targets ...any) error {
-	// INSERT QUERY
-	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
-	stmt, err := db.PrepareContext(ctx, req)
-	if err != nil {
-		log.Printf("[sql] error: %s", err)
-		return &Error{Query: req, Err: err}
-	}
-	defer stmt.Close()
-
-	for _, target := range targets {
-		val := reflect.ValueOf(target)
-
-		for val.Kind() == reflect.Ptr {
-			if val.IsNil() {
-				// instanciate it
-				val.Set(reflect.New(val.Type().Elem()))
-			}
-			val = val.Elem()
-		}
-		typ := val.Type()
-
-		if typ != t.typ {
-			panic("invalid type for query")
-		}
-
-		params := make([]any, len(t.fields))
-
-		for n, f := range t.fields {
-			fval := val.Field(f.index)
-			if fval.Kind() == reflect.Ptr {
-				if fval.IsNil() {
-					continue
-				}
-			}
-			params[n] = export(fval.Interface())
-		}
-
-		_, err := stmt.ExecContext(ctx, params...)
-		if err != nil {
-			log.Printf("[sql] error: %s", err)
-			return &Error{Query: req, Err: err}
-		}
-	}
-	return nil
 }
 
 func (t *TableMeta) scanValue(rows *sql.Rows, val reflect.Value) error {
