@@ -52,6 +52,8 @@ func TestSQL(t *testing.T) {
 
 	// test values
 	var v3 *TestTable1b
+
+	// passing a pointer to a nil pointer will cause a new structure to be allocated automatically
 	err = psql.FetchOne(context.Background(), &v3, map[string]any{"Key": 42})
 	if err != nil {
 		t.Fatalf("failed to fetch 42: %s", err)
@@ -63,7 +65,7 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Fetch 42: bad status")
 	}
 
-	err = psql.FetchOne(context.Background(), &v3, map[string]any{"Key": 43})
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 43})
 	if err != nil {
 		t.Fatalf("failed to fetch 43: %s", err)
 	}
@@ -74,7 +76,7 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Fetch 43: bad status")
 	}
 
-	err = psql.FetchOne(context.Background(), &v3, map[string]any{"Key": 44})
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 44})
 	if !psql.IsNotExist(err) {
 		t.Errorf("Fetch 44: should be not found, but error was %v", err)
 	}
