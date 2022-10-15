@@ -10,10 +10,12 @@ import (
 )
 
 type TableMeta struct {
-	typ    reflect.Type
-	table  string // table name
-	fields []*structField
-	fldStr string // string of all fields
+	typ     reflect.Type
+	table   string // table name
+	fields  []*structField
+	keys    []*structKey
+	mainKey *structKey
+	fldStr  string // string of all fields
 }
 
 var (
@@ -80,9 +82,23 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 			attrs = tagAttrs
 		}
 
-		if finfo.Type == nameType {
+		switch finfo.Type {
+		case nameType:
 			// this is actually the name of the table
 			info.table = col
+			continue
+		case keyType:
+			key := &structKey{
+				index: i,
+				name:  finfo.Name,
+				key:   col,
+			}
+			key.loadAttrs(attrs)
+			info.keys = append(info.keys, key)
+
+			if (info.mainKey == nil && key.isUnique()) || key.typ == keyPrimary {
+				info.mainKey = key
+			}
 			continue
 		}
 

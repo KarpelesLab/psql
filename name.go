@@ -11,6 +11,4 @@ var nameType = reflect.TypeOf(Name{})
 // TableName psql.Name `sql:"X"`
 // ...
 // }
-type Name struct {
-	Table string
-}
+type Name struct{}

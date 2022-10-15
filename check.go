@@ -101,6 +101,10 @@ func (t *TableMeta) createTable() error {
 		}
 		s.WriteString(field.defString())
 	}
+	for _, key := range t.keys {
+		s.WriteString(", ")
+		s.WriteString(key.defString())
+	}
 	// TODO add keys
 	s.WriteString(")")
 
