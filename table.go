@@ -74,20 +74,12 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 				continue
 			}
 			// handle properties, etc
-			tagData := strings.Split(tag, ",")
-			if tagData[0] != "" {
+			tagCol, tagAttrs := parseTagData(tag)
+			if tagCol != "" {
 				// could be sql:",type=..." so only set col if not empty
-				col = tagData[0]
+				col = tagCol
 			}
-			tagData = tagData[1:]
-			for _, v := range tagData {
-				p := strings.IndexByte(v, '=')
-				if p == -1 {
-					attrs[v] = ""
-					continue
-				}
-				attrs[v[:p]] = v[p+1:]
-			}
+			attrs = tagAttrs
 		}
 
 		if finfo.Type == nameType {

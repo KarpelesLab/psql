@@ -34,6 +34,8 @@ func (t *TableMeta) checkStructure() error {
 		flds[f.column] = f
 	}
 
+	var alterData []string
+
 	for res.Next() {
 		var field, typ, null, key, xtra, priv, comment string
 		var dflt, col *string
@@ -47,17 +49,38 @@ func (t *TableMeta) checkStructure() error {
 			// TODO check if there is a DROP or RENAME rule for this field
 			continue
 		}
+		delete(flds, field)
 		ok, err := f.matches(typ, null, col, dflt)
 		if err != nil {
 			return fmt.Errorf("field %s.%s fails check: %w", t.table, field, err)
 		}
 		if !ok {
 			// generate alter query
-			log.Printf("[psql] NEED: ALTER TABLE `%s` CHANGE %s", t.table, f.defString())
+			alterData = append(alterData, "MODIFY "+f.defString())
 		}
 		// field=Log__ typ=char(36) col=latin1_general_ci null=NO key=PRI, dflt=%!s(*string=<nil>) xtra= priv=select,insert,update,references comment=
 		// field=Secure_Key__ typ=char(36) col=latin1_general_ci null=NO key=, dflt=%!s(*string=0xc0000b6420) xtra= priv=select,insert,update,references comment=
 		//log.Printf("field=%s typ=%s col=%s null=%s key=%s, dflt=%s xtra=%s priv=%s comment=%s", field, typ, col, null, key, dflt, xtra, priv, comment)
+	}
+	for _, f := range flds {
+		alterData = append(alterData, "ADD "+f.defString())
+	}
+
+	if len(alterData) > 0 {
+		s := &strings.Builder{}
+		s.WriteString("ALTER TABLE ")
+		s.WriteString(QuoteName(t.table))
+		s.WriteByte(' ')
+		for n, req := range alterData {
+			if n > 0 {
+				s.WriteString(", ")
+			}
+			s.WriteString(req)
+		}
+		_, err := db.Exec(s.String())
+		if err != nil {
+			return fmt.Errorf("while updating table %s: %w", t.table, err)
+		}
 	}
 	return nil
 }

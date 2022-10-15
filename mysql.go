@@ -1,56 +1,17 @@
 package psql
 
-import (
-	"database/sql"
-	"fmt"
-	"log"
-	"time"
-
-	"github.com/go-sql-driver/mysql"
-)
-
-var db *sql.DB
-
-// Init starts the database pool and allows all other methods in psql to work
-func Init(dsn string) error {
-	cfg, err := mysql.ParseDSN(dsn)
-	if err != nil {
-		return err
-	}
-
-	cfg.Params = map[string]string{
-		"charset":  "utf8mb4",
-		"sql_mode": "'ANSI,NO_BACKSLASH_ESCAPES'",
-	}
-
-	// use db to check
-	db, err = sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		return fmt.Errorf("Connection failed: %w", err)
-	}
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(128)
-	db.SetMaxIdleConns(32)
-
-	res, err := db.Query("SHOW VARIABLES LIKE 'version%'")
-	if err != nil {
-		return fmt.Errorf("SHOW VARIABLES failed: %w", err)
-	}
-
-	defer res.Close()
-	for res.Next() {
-		var k, v string
-		if err := res.Scan(&k, &v); err != nil {
-			panic(err)
-		}
-		log.Printf("[mysql] %s = %s", k, v)
-	}
-
-	return nil
-}
-
-// Exec simply runs a query against the database
-func Exec(q string) error {
-	_, err := db.Exec(q)
-	return err
+// Starting MySQL 8.0.19, numeric types length specification has been deprecated and may not be reflected, except for tinyint(1) or zerofill stuff.
+// Because we don't want to depend on the version we instead detect if a type is numeric, in which case we ignore the length difference
+var numericTypes = map[string]bool{
+	"bit":              true,
+	"tinyint":          true,
+	"tinyint(1)":       false, // exception
+	"smallint":         true,
+	"mediumint":        true,
+	"int":              true,
+	"integer":          true,
+	"bigint":           true,
+	"float":            true,
+	"double":           true,
+	"double precision": true,
 }

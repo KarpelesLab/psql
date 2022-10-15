@@ -134,6 +134,9 @@ func (f *structField) defString() string {
 			return "" // bad def
 		}
 	}
+
+	// TODO unsigned
+
 	if mycol, ok := f.attrs["collation"]; ok {
 		mydef += " COLLATE " + mycol
 	}
@@ -146,7 +149,16 @@ func (f *structField) matches(typ, null string, col, dflt *string) (bool, error)
 		return false, errors.New("no valid field defined")
 	}
 
-	if f.sqlType() != typ {
+	myType := f.sqlType()
+	if a, b := numericTypes[typ]; myType != typ && a && b {
+		// typ we got from mysql is different, but that might not be an issue
+		if typ == strings.ToLower(f.attrs["type"]) {
+			// we're good
+			myType = typ
+		}
+	}
+
+	if myType != typ {
 		return false, nil
 	}
 
