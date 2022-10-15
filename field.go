@@ -169,6 +169,11 @@ func (f *structField) matches(typ, null string, col, dflt *string) (bool, error)
 		return false, nil
 	}
 
+	// check default
+	if mydef, ok := f.attrs["default"]; ok && dflt != nil && mydef != *dflt {
+		return false, nil
+	}
+
 	if mycol, ok := f.attrs["collation"]; ok && col != nil && mycol != *col {
 		// bad collation → alter
 		return false, nil
