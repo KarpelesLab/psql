@@ -40,11 +40,11 @@ func Table(obj any) *TableMeta {
 }
 
 func GetTableMeta(typ reflect.Type) *TableMeta {
-	if typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))
+		panic(fmt.Sprintf("target must be a struct, got a %s", typ))
 	}
 
 	tableMapL.RLock()
@@ -136,10 +136,16 @@ func (t *TableMeta) FetchOne(ctx context.Context, target interface{}, where map[
 	val := reflect.ValueOf(target)
 
 	if val.Kind() != reflect.Ptr {
-		panic("target must be a *struct")
+		panic(fmt.Sprintf("target must be a pointer to a struct, got a %T", target))
+	}
+	for val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			// instanciate it
+			val.Set(reflect.New(val.Type().Elem()))
+		}
+		val = val.Elem()
 	}
 
-	val = val.Elem()
 	typ := val.Type()
 
 	if typ != t.typ {
@@ -229,7 +235,11 @@ func (t *TableMeta) Insert(ctx context.Context, targets ...any) error {
 	for _, target := range targets {
 		val := reflect.ValueOf(target)
 
-		if val.Kind() == reflect.Ptr {
+		for val.Kind() == reflect.Ptr {
+			if val.IsNil() {
+				// instanciate it
+				val.Set(reflect.New(val.Type().Elem()))
+			}
 			val = val.Elem()
 		}
 		typ := val.Type()
