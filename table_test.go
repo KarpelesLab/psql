@@ -36,7 +36,7 @@ func TestSQL(t *testing.T) {
 	}
 
 	// Drop table if it exists so we start from a clean state
-	err = psql.Exec("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1"))
+	err = psql.Exec(psql.Q("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1")))
 	if err != nil {
 		t.Errorf("Failed to drop table: %s", err)
 	}

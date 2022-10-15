@@ -7,6 +7,10 @@ import (
 )
 
 func (t *TableMeta) checkStructure() error {
+	if v, ok := t.attrs["check"]; ok && v == "0" {
+		// do not check table
+		return nil
+	}
 	// SHOW FULL FIELDS FROM `table`
 	// SHOW TABLE STATUS LIKE 'table' (engine)
 	// SHOW INDEX FROM `table`
@@ -65,6 +69,34 @@ func (t *TableMeta) checkStructure() error {
 	for _, f := range flds {
 		alterData = append(alterData, "ADD "+f.defString())
 	}
+
+	res, err = db.Query("SHOW INDEX FROM " + QuoteName(t.table))
+	if err != nil {
+		return fmt.Errorf("while doing SHOW INDEX: %w", err)
+	}
+	defer res.Close()
+
+	// index keys by name
+	keys := make(map[string]*structKey)
+	for _, k := range t.keys {
+		n := k.keyname()
+		if _, found := keys[n]; found {
+			return fmt.Errorf("invalid table structure, key %s.%s is defined multiple times", t.table, n)
+		}
+		keys[n] = k
+	}
+
+	var kInfo *ShowIndexResult
+	for res.Next() {
+		err = Table(kInfo).ScanTo(res, &kInfo)
+		if err != nil {
+			return err
+		}
+		log.Printf("TODO INDEX SCAN kname=%s", kInfo.KeyName)
+	}
+
+	// TODO: SHOW TABLE STATUS LIKE 'table'
+	// → check Engine
 
 	if len(alterData) > 0 {
 		s := &strings.Builder{}

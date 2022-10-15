@@ -48,9 +48,3 @@ func Init(dsn string) error {
 
 	return nil
 }
-
-// Exec simply runs a query against the database
-func Exec(q string) error {
-	_, err := db.Exec(q)
-	return err
-}

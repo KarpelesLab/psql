@@ -13,9 +13,11 @@ type TableMeta struct {
 	typ     reflect.Type
 	table   string // table name
 	fields  []*structField
+	fldcol  map[string]*structField
 	keys    []*structKey
 	mainKey *structKey
 	fldStr  string // string of all fields
+	attrs   map[string]string
 }
 
 var (
@@ -55,8 +57,10 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 	}
 
 	info = &TableMeta{
-		typ:   typ,
-		table: FormatTableName(typ.Name()),
+		typ:    typ,
+		table:  FormatTableName(typ.Name()),
+		fldcol: make(map[string]*structField),
+		attrs:  make(map[string]string),
 	}
 
 	cnt := typ.NumField()
@@ -86,6 +90,7 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 		case nameType:
 			// this is actually the name of the table
 			info.table = col
+			info.attrs = attrs
 			continue
 		case keyType:
 			key := &structKey{
@@ -122,6 +127,7 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 		}
 
 		info.fields = append(info.fields, fld)
+		info.fldcol[fld.column] = fld
 	}
 
 	if len(info.fields) == 0 {
@@ -145,24 +151,66 @@ func (t *TableMeta) Name() string {
 	return t.table
 }
 
+func (t *TableMeta) spawn(rows *sql.Rows) (any, error) {
+	// spawn an object based on the provided row
+	val := reflect.New(t.typ)
+	err := t.scanValue(rows, val)
+	if err != nil {
+		return nil, err
+	}
+	p := reflect.New(reflect.PointerTo(t.typ))
+	p.Set(val)
+	return p.Interface(), nil
+}
+
+func (t *TableMeta) ScanTo(row *sql.Rows, v any) error {
+	val := reflect.ValueOf(v)
+	for val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			// instanciate it
+			val.Set(reflect.New(val.Type().Elem()))
+		}
+		val = val.Elem()
+	}
+
+	typ := val.Type()
+
+	if typ != t.typ {
+		panic("invalid type for query")
+	}
+
+	return t.scanValue(row, val)
+}
+
 func (t *TableMeta) scanValue(rows *sql.Rows, val reflect.Value) error {
 	// Make a slice for the values, and a reference interface slice
-	values := make([]sql.RawBytes, len(t.fields))
-	scan := make([]interface{}, len(t.fields))
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	n := len(cols)
+
+	values := make([]sql.RawBytes, n)
+	scan := make([]interface{}, n)
 	for i := range values {
 		scan[i] = &values[i]
 	}
 
 	// scan
-	err := rows.Scan(scan...)
+	err = rows.Scan(scan...)
 	if err != nil {
 		log.Printf("scan err %s", err)
 		return err
 	}
 
 	// perform set
-	for i := 0; i < len(t.fields); i += 1 {
-		f := val.Field(t.fields[i].index)
+	for i := 0; i < n; i += 1 {
+		fld, ok := t.fldcol[cols[i]]
+		if !ok {
+			// maybe report this as a warning?
+			continue
+		}
+		f := val.Field(fld.index)
 		// if nil, set to nil
 		if values[i] == nil {
 			if f.Kind() == reflect.Ptr {
@@ -171,7 +219,7 @@ func (t *TableMeta) scanValue(rows *sql.Rows, val reflect.Value) error {
 				}
 				continue
 			} else {
-				return fmt.Errorf("on field %s: %w", t.fields[i].name, ErrNotNillable)
+				return fmt.Errorf("on field %s: %w", fld.name, ErrNotNillable)
 			}
 		}
 		// make sure "f" is a settable value (not a ptr), allocate if needed
@@ -181,9 +229,9 @@ func (t *TableMeta) scanValue(rows *sql.Rows, val reflect.Value) error {
 			}
 			f = f.Elem()
 		}
-		err = t.fields[i].setter(f, values[i])
+		err = fld.setter(f, values[i])
 		if err != nil {
-			return fmt.Errorf("on field %s: %w", t.fields[i].name, err)
+			return fmt.Errorf("on field %s: %w", fld.name, err)
 		}
 	}
 

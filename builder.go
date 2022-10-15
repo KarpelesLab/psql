@@ -37,7 +37,7 @@ type QueryBuilder struct {
 	err error
 }
 
-func Q() *QueryBuilder {
+func B() *QueryBuilder {
 	return new(QueryBuilder)
 }
 

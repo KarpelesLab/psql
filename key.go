@@ -28,7 +28,7 @@ const (
 type structKey struct {
 	index int
 	name  string
-	key   string // column name, can be != name
+	key   string // key name, can be != name
 	typ   int
 	attrs map[string]string
 }
@@ -46,8 +46,17 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 		default:
 			log.Printf("[psql] Unsupported index key type %s assumed as INDEX", t)
 		}
+	} else if k.key == "PRIMARY" {
+		k.typ = keyPrimary
 	}
 	k.attrs = attrs
+}
+
+func (k *structKey) keyname() string {
+	if k.typ == keyPrimary {
+		return "PRIMARY"
+	}
+	return k.key
 }
 
 func (k *structKey) defString() string {

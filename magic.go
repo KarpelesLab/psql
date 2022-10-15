@@ -33,5 +33,7 @@ var magicTypes = map[string]string{
 	"*int64":          "type=BIGINT,size=21,unsigned=0,null=1",
 	"float64":         "type=DOUBLE,null=0",
 	"*float64":        "type=DOUBLE,null=1",
+	"bool":            "type=TINYINT,size=1,null=0",
+	"*bool":           "type=TINYINT,size=1,null=1",
 	"Stamp+time.Time": "import=TS", // for time.Time fields named "Stamp"
 }
