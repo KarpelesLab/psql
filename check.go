@@ -77,6 +77,7 @@ func (t *TableMeta) checkStructure() error {
 			}
 			s.WriteString(req)
 		}
+		log.Printf("[psql] Performing: %s", s.String())
 		_, err := db.Exec(s.String())
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
@@ -103,6 +104,7 @@ func (t *TableMeta) createTable() error {
 	// TODO add keys
 	s.WriteString(")")
 
+	log.Printf("[psql] Performing: %s", s.String())
 	_, err := db.Exec(s.String())
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
