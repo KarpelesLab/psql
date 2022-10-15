@@ -17,7 +17,7 @@ type TestTable1b struct {
 	TableName psql.Name `sql:"Test_Table1"`
 	Key       uint64
 	Name      string `sql:"Name,type=VARCHAR,size=128,null=0"`
-	Status    string `sql:"Status,type=ENUM,values=valid|inactive|zombie,default=valid"`
+	Status    string `sql:"Status,type=ENUM,values='valid,inactive,zombie',default=valid"`
 	Created   time.Time
 }
 

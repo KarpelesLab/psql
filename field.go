@@ -76,8 +76,8 @@ func (f *structField) sqlType() string {
 	case "enum", "set":
 		// get "values"
 		if myvals, ok := f.attrs["values"]; ok {
-			// split with |
-			l := strings.Split(myvals, "|")
+			// split with ,
+			l := strings.Split(myvals, ",")
 			// assuming nothing need to be escape for enum/set values (TODO FIXME)
 			return mytyp + "('" + strings.Join(l, "','") + "')"
 		} else {
