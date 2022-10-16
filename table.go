@@ -29,12 +29,9 @@ var (
 	tableMapL sync.RWMutex
 )
 
-func Table[T any](obj *T) *TableMeta[T] {
-	typ := reflect.TypeOf(obj)
+func Table[T any]() *TableMeta[T] {
+	typ := reflect.TypeOf((*T)(nil)).Elem()
 
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-	}
 	if typ.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))
 	}

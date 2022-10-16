@@ -27,7 +27,7 @@ func Update[T any](ctx context.Context, target ...*T) error {
 
 func HasChanged[T any](obj *T) bool {
 	// report if object has been updated
-	return Table(obj).HasChanged(obj)
+	return Table[T]().HasChanged(obj)
 }
 
 func (t *TableMeta[T]) HasChanged(obj any) bool {

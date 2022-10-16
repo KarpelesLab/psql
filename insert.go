@@ -21,7 +21,7 @@ func Insert[T any](ctx context.Context, target ...*T) error {
 		return nil
 	}
 
-	return Table(target[0]).Insert(ctx, target...)
+	return Table[T]().Insert(ctx, target...)
 }
 
 func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {

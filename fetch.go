@@ -9,11 +9,11 @@ import (
 )
 
 func FetchOne[T any](ctx context.Context, target *T, where map[string]any) error {
-	return Table(target).FetchOne(ctx, target, where)
+	return Table[T]().FetchOne(ctx, target, where)
 }
 
 func Fetch[T any](ctx context.Context, obj *T, where map[string]any) ([]*T, error) {
-	return Table(obj).Fetch(ctx, where)
+	return Table[T]().Fetch(ctx, where)
 }
 
 func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string]interface{}) error {

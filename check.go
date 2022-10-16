@@ -42,7 +42,7 @@ func (t *TableMeta[T]) checkStructure() error {
 
 	var fInfo = &ShowFieldsResult{}
 	for res.Next() {
-		err = Table(fInfo).ScanTo(res, fInfo)
+		err = Table[ShowFieldsResult]().ScanTo(res, fInfo)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func (t *TableMeta[T]) checkStructure() error {
 
 	var kInfo = &ShowIndexResult{}
 	for res.Next() {
-		err = Table(kInfo).ScanTo(res, kInfo)
+		err = Table[ShowIndexResult]().ScanTo(res, kInfo)
 		if err != nil {
 			return err
 		}
