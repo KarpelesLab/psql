@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (t *TableMeta) checkStructure() error {
+func (t *TableMeta[T]) checkStructure() error {
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
@@ -40,9 +40,9 @@ func (t *TableMeta) checkStructure() error {
 
 	var alterData []string
 
-	var fInfo *ShowFieldsResult
+	var fInfo = &ShowFieldsResult{}
 	for res.Next() {
-		err = Table(fInfo).ScanTo(res, &fInfo)
+		err = Table(fInfo).ScanTo(res, fInfo)
 		if err != nil {
 			return err
 		}
@@ -86,9 +86,9 @@ func (t *TableMeta) checkStructure() error {
 		keys[n] = k
 	}
 
-	var kInfo *ShowIndexResult
+	var kInfo = &ShowIndexResult{}
 	for res.Next() {
-		err = Table(kInfo).ScanTo(res, &kInfo)
+		err = Table(kInfo).ScanTo(res, kInfo)
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func (t *TableMeta) checkStructure() error {
 	return nil
 }
 
-func (t *TableMeta) createTable() error {
+func (t *TableMeta[T]) createTable() error {
 	log.Printf("[psql] Creating table %s", t.table)
 
 	// Prepare a CREATE TABLE query

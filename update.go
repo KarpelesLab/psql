@@ -24,3 +24,18 @@ func Update(ctx context.Context, target ...interface{}) error {
 	//table := GetTableMeta(reflect.TypeOf(target[0]))
 	//return table.Update(ctx, target...)
 }
+
+func HasChanged[T any](obj *T) bool {
+	// report if object has been updated
+	return Table(obj).HasChanged(obj)
+}
+
+func (t *TableMeta[T]) HasChanged(obj any) bool {
+	if t.mainKey == nil {
+		// no main key → always report changed
+		return true
+	}
+
+	// TODO
+	return true
+}

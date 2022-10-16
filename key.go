@@ -15,7 +15,9 @@ var keyType = reflect.TypeOf(Key{})
 // KeyName psql.Key `sql:",type=UNIQUE,fields='A,B'"`
 // ...
 // }
-type Key struct{}
+type Key struct {
+	state *rowState
+}
 
 const (
 	keyPrimary = iota + 1

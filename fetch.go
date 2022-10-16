@@ -5,39 +5,21 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"strings"
 )
 
-func FetchOne(ctx context.Context, target any, where map[string]any) error {
-	table := GetTableMeta(reflect.TypeOf(target))
-	return table.FetchOne(ctx, target, where)
+func FetchOne[T any](ctx context.Context, target *T, where map[string]any) error {
+	return Table(target).FetchOne(ctx, target, where)
 }
 
-func Fetch(ctx context.Context, obj any, where map[string]any) ([]any, error) {
-	table := GetTableMeta(reflect.TypeOf(obj))
-	return table.Fetch(ctx, where)
+func Fetch[T any](ctx context.Context, obj *T, where map[string]any) ([]*T, error) {
+	return Table(obj).Fetch(ctx, where)
 }
 
-func (t *TableMeta) FetchOne(ctx context.Context, target interface{}, where map[string]interface{}) error {
+func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string]interface{}) error {
 	// grab fields from target
-	val := reflect.ValueOf(target)
-
-	if val.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("target must be a pointer to a struct, got a %T", target))
-	}
-	for val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			// instanciate it
-			val.Set(reflect.New(val.Type().Elem()))
-		}
-		val = val.Elem()
-	}
-
-	typ := val.Type()
-
-	if typ != t.typ {
-		panic("invalid type for query")
+	if target == nil {
+		return fmt.Errorf("FetchOne requires a non-nil target")
 	}
 
 	// SELECT QUERY
@@ -68,11 +50,11 @@ func (t *TableMeta) FetchOne(ctx context.Context, target interface{}, where map[
 		return os.ErrNotExist
 	}
 
-	err = t.scanValue(rows, val)
+	err = t.scanValue(rows, target)
 	return err
 }
 
-func (t *TableMeta) Fetch(ctx context.Context, where map[string]interface{}) ([]interface{}, error) {
+func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]interface{}) ([]*T, error) {
 	// SELECT QUERY
 	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
 	var params []interface{}
@@ -95,16 +77,14 @@ func (t *TableMeta) Fetch(ctx context.Context, where map[string]interface{}) ([]
 	}
 	defer rows.Close()
 
-	var final []interface{}
+	var final []*T
 
 	for rows.Next() {
-		val := reflect.New(t.typ)
-
-		err = t.scanValue(rows, val.Elem())
+		val, err := t.spawn(rows)
 		if err != nil {
 			return nil, err
 		}
-		final = append(final, val.Interface())
+		final = append(final, val)
 	}
 
 	return final, nil

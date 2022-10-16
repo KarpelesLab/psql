@@ -16,16 +16,15 @@ import (
 // psql.Table(obj).Insert(ctx, obj)
 //
 // All passed objects must be of the same type
-func Insert(ctx context.Context, target ...interface{}) error {
+func Insert[T any](ctx context.Context, target ...*T) error {
 	if len(target) == 0 {
 		return nil
 	}
 
-	table := GetTableMeta(reflect.TypeOf(target[0]))
-	return table.Insert(ctx, target...)
+	return Table(target[0]).Insert(ctx, target...)
 }
 
-func (t *TableMeta) Insert(ctx context.Context, targets ...any) error {
+func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	// INSERT QUERY
 	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := db.PrepareContext(ctx, req)

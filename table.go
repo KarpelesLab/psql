@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-type TableMeta struct {
+type TableMeta[T any] struct {
 	typ     reflect.Type
 	table   string // table name
 	fields  []*structField
@@ -20,43 +20,33 @@ type TableMeta struct {
 	attrs   map[string]string
 }
 
+type TableMetaIntf interface {
+	Name() string
+}
+
 var (
-	tableMap  = make(map[reflect.Type]*TableMeta)
+	tableMap  = make(map[reflect.Type]TableMetaIntf)
 	tableMapL sync.RWMutex
 )
 
-func getAllTableMeta() []*TableMeta {
-	tableMapL.Lock()
-	defer tableMapL.Unlock()
+func Table[T any](obj *T) *TableMeta[T] {
+	typ := reflect.TypeOf(obj)
 
-	res := make([]*TableMeta, 0, len(tableMap))
-
-	for _, v := range tableMap {
-		res = append(res, v)
-	}
-	return res
-}
-
-func Table(obj any) *TableMeta {
-	return GetTableMeta(reflect.TypeOf(obj))
-}
-
-func GetTableMeta(typ reflect.Type) *TableMeta {
-	for typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("target must be a struct, got a %s", typ))
+		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))
 	}
 
 	tableMapL.RLock()
-	info, ok := tableMap[typ]
+	found, ok := tableMap[typ]
 	tableMapL.RUnlock()
 	if ok {
-		return info
+		return found.(*TableMeta[T])
 	}
 
-	info = &TableMeta{
+	info := &TableMeta[T]{
 		typ:    typ,
 		table:  FormatTableName(typ.Name()),
 		fldcol: make(map[string]*structField),
@@ -168,42 +158,27 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 	return info
 }
 
-func (t *TableMeta) Name() string {
+func (t *TableMeta[T]) Name() string {
 	return t.table
 }
 
-func (t *TableMeta) spawn(rows *sql.Rows) (any, error) {
+func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
 	// spawn an object based on the provided row
 	val := reflect.New(t.typ)
-	err := t.scanValue(rows, val)
-	if err != nil {
-		return nil, err
-	}
 	p := reflect.New(reflect.PointerTo(t.typ))
 	p.Set(val)
-	return p.Interface(), nil
+	res := p.Interface().(*T)
+	err := t.scanValue(rows, res)
+	return res, err
 }
 
-func (t *TableMeta) ScanTo(row *sql.Rows, v any) error {
-	val := reflect.ValueOf(v)
-	for val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			// instanciate it
-			val.Set(reflect.New(val.Type().Elem()))
-		}
-		val = val.Elem()
-	}
-
-	typ := val.Type()
-
-	if typ != t.typ {
-		panic("invalid type for query")
-	}
-
-	return t.scanValue(row, val)
+func (t *TableMeta[T]) ScanTo(row *sql.Rows, v *T) error {
+	return t.scanValue(row, v)
 }
 
-func (t *TableMeta) scanValue(rows *sql.Rows, val reflect.Value) error {
+func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
+	val := reflect.ValueOf(target).Elem()
+
 	// Make a slice for the values, and a reference interface slice
 	cols, err := rows.Columns()
 	if err != nil {
