@@ -111,15 +111,12 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 		if keyName, ok := attrs["key"]; ok {
 			delete(attrs, "key")
 			if k, found := extraKeys[keyName]; found {
-				if _, found = k.attrs["fields"]; found {
-					k.attrs["fields"] += "," + col
-				} else {
-					k.attrs["fields"] = col
-				}
+				k.fields = append(k.fields, col)
 			} else {
 				k = &structKey{
-					index: -1,
-					attrs: map[string]string{"fields": col},
+					index:  -1,
+					fields: []string{col},
+					attrs:  map[string]string{},
 				}
 				k.loadKeyName(keyName)
 				extraKeys[keyName] = k

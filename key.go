@@ -26,11 +26,12 @@ const (
 )
 
 type structKey struct {
-	index int
-	name  string
-	key   string // key name, can be != name
-	typ   int
-	attrs map[string]string
+	index  int
+	name   string
+	key    string // key name, can be != name
+	typ    int
+	attrs  map[string]string
+	fields []string
 }
 
 func (k *structKey) loadAttrs(attrs map[string]string) {
@@ -54,6 +55,7 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 		k.typ = keyPrimary
 	}
 	k.attrs = attrs
+	k.fields = strings.Split(attrs["fields"], ",")
 }
 
 func (k *structKey) loadKeyName(kn string) {
@@ -110,8 +112,7 @@ func (k *structKey) defString() string {
 	}
 
 	s.WriteByte('(')
-	flds := k.attrs["fields"]
-	for n, f := range strings.Split(flds, ",") {
+	for n, f := range k.fields {
 		if n > 0 {
 			s.WriteString(", ")
 		}
