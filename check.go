@@ -40,23 +40,23 @@ func (t *TableMeta) checkStructure() error {
 
 	var alterData []string
 
+	var fInfo *ShowFieldsResult
 	for res.Next() {
-		var field, typ, null, key, xtra, priv, comment string
-		var dflt, col *string
-		if err := res.Scan(&field, &typ, &col, &null, &key, &dflt, &xtra, &priv, &comment); err != nil {
+		err = Table(fInfo).ScanTo(res, &fInfo)
+		if err != nil {
 			return err
 		}
 
-		f, ok := flds[field]
+		f, ok := flds[fInfo.Field]
 		if !ok {
-			log.Printf("[psql:check] unused field %s.%s in structure", t.table, field)
+			log.Printf("[psql:check] unused field %s.%s in structure", t.table, fInfo.Field)
 			// TODO check if there is a DROP or RENAME rule for this field
 			continue
 		}
-		delete(flds, field)
-		ok, err := f.matches(typ, null, col, dflt)
+		delete(flds, fInfo.Field)
+		ok, err := f.matches(fInfo.Type, fInfo.Null, fInfo.Collation, fInfo.Default)
 		if err != nil {
-			return fmt.Errorf("field %s.%s fails check: %w", t.table, field, err)
+			return fmt.Errorf("field %s.%s fails check: %w", t.table, fInfo.Field, err)
 		}
 		if !ok {
 			// generate alter query

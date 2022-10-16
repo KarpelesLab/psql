@@ -16,6 +16,19 @@ var numericTypes = map[string]bool{
 	"double precision": true,
 }
 
+type ShowFieldsResult struct {
+	Virtual    Name    `sql:",check=0"`
+	Field      string  `sql:",type=VARCHAR,size=256"`
+	Type       string  `sql:",type=VARCHAR,size=256"`
+	Collation  *string `sql:",type=VARCHAR,size=256,null=1"`
+	Null       string  `sql:",type=VARCHAR,size=3"` // "YES" or "NO"
+	Key        string  `sql:",type=VARCHAR,size=3"` // "PRI", "UNI", "MUL" or ""
+	Default    *string `sql:",type=VARCHAR,size=256"`
+	Extra      string  `sql:",type=VARCHAR,size=256"`
+	Privileges string  `sql:",type=VARCHAR,size=256"` // "select,insert,update,references"
+	Comment    string  `sql:",type=VARCHAR,size=256"`
+}
+
 type ShowIndexResult struct {
 	Virtual     Name   `sql:",check=0"`
 	Table       string `sql:",type=VARCHAR,size=256"`
