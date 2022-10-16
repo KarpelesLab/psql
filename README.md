@@ -16,8 +16,8 @@ type Table1 struct {
 
 // ...
 
-var obj *Table1
-err := psql.FetchOne(nil, &obj, map[string]any{"Key": 42}) // this fetches entry with Key=42
+var obj = &Table1{}
+err := psql.FetchOne(nil, obj, map[string]any{"Key": 42}) // this fetches entry with Key=42
 ```
 
 ## Query builder
