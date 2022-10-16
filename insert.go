@@ -35,20 +35,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	defer stmt.Close()
 
 	for _, target := range targets {
-		val := reflect.ValueOf(target)
-
-		for val.Kind() == reflect.Ptr {
-			if val.IsNil() {
-				// instanciate it
-				val.Set(reflect.New(val.Type().Elem()))
-			}
-			val = val.Elem()
-		}
-		typ := val.Type()
-
-		if typ != t.typ {
-			panic("invalid type for query")
-		}
+		val := reflect.ValueOf(target).Elem()
 
 		params := make([]any, len(t.fields))
 
