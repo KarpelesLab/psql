@@ -162,12 +162,16 @@ func (t *TableMeta[T]) Name() string {
 	return t.table
 }
 
-func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
-	// spawn an object based on the provided row
+func (t *TableMeta[T]) newobj() *T {
 	val := reflect.New(t.typ)
 	p := reflect.New(reflect.PointerTo(t.typ))
 	p.Set(val)
-	res := p.Interface().(*T)
+	return p.Interface().(*T)
+}
+
+func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
+	// spawn an object based on the provided row
+	res := t.newobj()
 	err := t.scanValue(rows, res)
 	return res, err
 }

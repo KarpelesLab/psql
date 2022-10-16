@@ -14,7 +14,7 @@ import (
 // psql.Table(obj).Update(ctx, obj)
 //
 // All passed objects must be of the same type
-func Update(ctx context.Context, target ...interface{}) error {
+func Update[T any](ctx context.Context, target ...*T) error {
 	if len(target) == 0 {
 		return nil
 	}
