@@ -9,19 +9,17 @@ import (
 )
 
 type TestTable1 struct {
-	Key     uint64
+	Key     uint64   `sql:",key=PRIMARY"`
 	Name    string   `sql:"Name,type=VARCHAR,size=64,null=0"`
-	Primary psql.Key `sql:",type=PRIMARY,fields=Key"`
 	NameKey psql.Key `sql:",type=UNIQUE,fields=Name"`
 }
 
 type TestTable1b struct {
 	TableName psql.Name `sql:"Test_Table1"`
-	Key       uint64
-	Name      string `sql:"Name,type=VARCHAR,size=128,null=0"`
-	Status    string `sql:"Status,type=ENUM,null=0,values='valid,inactive,zombie,new',default=new"`
+	Key       uint64    `sql:",key=PRIMARY"`
+	Name      string    `sql:"Name,type=VARCHAR,size=128,null=0"`
+	Status    string    `sql:"Status,type=ENUM,null=0,values='valid,inactive,zombie,new',default=new"`
 	Created   time.Time
-	Primary   psql.Key `sql:",type=PRIMARY,fields=Key"`
 	NameKey   psql.Key `sql:",type=UNIQUE,fields=Name"`
 	StatusKey psql.Key `sql:",fields=Status"`
 }

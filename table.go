@@ -65,6 +65,7 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 
 	cnt := typ.NumField()
 	var names []string
+	extraKeys := make(map[string]*structKey)
 
 	for i := 0; i < cnt; i += 1 {
 		finfo := typ.Field(i)
@@ -105,6 +106,29 @@ func GetTableMeta(typ reflect.Type) *TableMeta {
 				info.mainKey = key
 			}
 			continue
+		}
+
+		if keyName, ok := attrs["key"]; ok {
+			delete(attrs, "key")
+			if k, found := extraKeys[keyName]; found {
+				if _, found = k.attrs["fields"]; found {
+					k.attrs["fields"] += "," + col
+				} else {
+					k.attrs["fields"] = col
+				}
+			} else {
+				k = &structKey{
+					index: -1,
+					attrs: map[string]string{"fields": col},
+				}
+				k.loadKeyName(keyName)
+				extraKeys[keyName] = k
+				info.keys = append(info.keys, k)
+
+				if (info.mainKey == nil && k.isUnique()) || k.typ == keyPrimary {
+					info.mainKey = k
+				}
+			}
 		}
 
 		if len(attrs) == 0 {

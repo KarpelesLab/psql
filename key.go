@@ -43,6 +43,10 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 			k.typ = keyUnique
 		case "INDEX":
 			k.typ = keyIndex
+		case "FULLTEXT":
+			k.typ = keyFulltext
+		case "SPATIAL":
+			k.typ = keySpatial
 		default:
 			log.Printf("[psql] Unsupported index key type %s assumed as INDEX", t)
 		}
@@ -50,6 +54,18 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 		k.typ = keyPrimary
 	}
 	k.attrs = attrs
+}
+
+func (k *structKey) loadKeyName(kn string) {
+	switch {
+	case kn == "PRIMARY":
+		k.typ = keyPrimary
+	case strings.HasPrefix(kn, "UNIQUE:"):
+		kn = strings.TrimPrefix(kn, "UNIQUE:")
+		k.typ = keyUnique
+	}
+	k.name = kn
+	k.key = kn
 }
 
 func (k *structKey) keyname() string {
