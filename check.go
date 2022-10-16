@@ -92,7 +92,25 @@ func (t *TableMeta) checkStructure() error {
 		if err != nil {
 			return err
 		}
-		log.Printf("TODO INDEX SCAN kname=%s", kInfo.KeyName)
+		k, ok := keys[kInfo.KeyName]
+		if !ok {
+			log.Printf("[psql:check] unused key %s.%s in structure", t.table, kInfo.KeyName)
+			// TODO check if there is a DROP or RENAME rule for this key
+			continue
+		}
+		delete(keys, kInfo.KeyName)
+		ok, err := k.matches(kInfo)
+		if err != nil {
+			return fmt.Errorf("key %s.%s fails check: %w", t.table, kInfo.KeyName, err)
+		}
+		if !ok {
+			// we can't change a key, but we can drop & recreate it
+			alterData = append(alterData, "DROP "+k.sqlKeyName())
+			alterData = append(alterData, "ADD "+k.defString())
+		}
+	}
+	for _, k := range keys {
+		alterData = append(alterData, "ADD "+k.defString())
 	}
 
 	// TODO: SHOW TABLE STATUS LIKE 'table'

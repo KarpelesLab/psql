@@ -59,6 +59,13 @@ func (k *structKey) keyname() string {
 	return k.key
 }
 
+func (k *structKey) sqlKeyName() string {
+	if k.typ == keyPrimary {
+		return "PRIMARY KEY"
+	}
+	return "INDEX " + QuoteName(k.key)
+}
+
 func (k *structKey) defString() string {
 	s := &strings.Builder{}
 
@@ -105,4 +112,10 @@ func (k *structKey) isUnique() bool {
 	default:
 		return false
 	}
+}
+
+func (k *structKey) matches(otherK *ShowIndexResult) (bool, error) {
+	// check if this key matches
+	// ColumnName?
+	return true, nil
 }
