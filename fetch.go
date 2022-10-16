@@ -12,7 +12,7 @@ func FetchOne[T any](ctx context.Context, target *T, where map[string]any) error
 	return Table[T]().FetchOne(ctx, target, where)
 }
 
-func Fetch[T any](ctx context.Context, obj *T, where map[string]any) ([]*T, error) {
+func Fetch[T any](ctx context.Context, where map[string]any) ([]*T, error) {
 	return Table[T]().Fetch(ctx, where)
 }
 

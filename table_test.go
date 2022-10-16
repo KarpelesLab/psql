@@ -86,6 +86,14 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Fetch 44: should be not found, but error was %v", err)
 	}
 
+	lst, err := psql.Fetch[TestTable1b](context.Background(), nil)
+	if err != nil {
+		t.Fatalf("failed to fetch all: %s", err)
+	}
+	if len(lst) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(lst))
+	}
+
 	// Re-fetch 42
 	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 42})
 	if err != nil {

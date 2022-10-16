@@ -160,10 +160,7 @@ func (t *TableMeta[T]) Name() string {
 }
 
 func (t *TableMeta[T]) newobj() *T {
-	val := reflect.New(t.typ)
-	p := reflect.New(reflect.PointerTo(t.typ))
-	p.Set(val)
-	return p.Interface().(*T)
+	return reflect.New(t.typ).Interface().(*T)
 }
 
 func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
