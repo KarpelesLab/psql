@@ -30,13 +30,16 @@ func dupr(src reflect.Value) reflect.Value {
 	case reflect.String:
 		// strings are not writable
 		return src
-	case reflect.Slice, reflect.Array:
+	case reflect.Slice:
+		size := src.Len()
+		dst := reflect.MakeSlice(src.Type(), size, size)
+		for i := 0; i < size; i++ {
+			dst.Index(i).Set(dupr(src.Index(i)))
+		}
+		return dst
+	case reflect.Array:
 		size := src.Len()
 		dst := reflect.New(src.Type()).Elem()
-		if src.Kind() == reflect.Slice {
-			dst.SetCap(size)
-			dst.SetLen(size)
-		}
 		for i := 0; i < size; i++ {
 			dst.Index(i).Set(dupr(src.Index(i)))
 		}
