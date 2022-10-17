@@ -17,7 +17,11 @@ func Init(dsn string) error {
 	if err != nil {
 		return err
 	}
+	return InitCfg(cfg)
+}
 
+func InitCfg(cfg *mysql.Config) error {
+	var err error
 	cfg.Params = map[string]string{
 		"charset":  "utf8mb4",
 		"sql_mode": "'ANSI,NO_BACKSLASH_ESCAPES'",
