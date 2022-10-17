@@ -3,7 +3,6 @@ package psql
 import (
 	"context"
 	"errors"
-	"log"
 	"reflect"
 )
 
@@ -21,45 +20,82 @@ func Update[T any](ctx context.Context, target ...*T) error {
 		return nil
 	}
 
-	// (TODO: need key)
-	return errors.New("TODO")
-	//table := GetTableMeta(reflect.TypeOf(target[0]))
-	//return table.Update(ctx, target...)
+	return Table[T]().Update(ctx, target...)
 }
 
-func HasChanged[T any](obj *T) bool {
-	// report if object has been updated
-	return Table[T]().HasChanged(obj)
-}
-
-func (t *TableMeta[T]) HasChanged(obj *T) bool {
-	st := t.rowstate(obj)
-	if st == nil {
-		// no main key → always report changed
-		log.Printf("[psql] HasChanged but no state")
-		return true
-	}
-	if !st.init {
-		// uninitialized → no state
-		log.Printf("[psql] HasChanged on non initialized value")
-		return true
+func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
+	if t.mainKey == nil {
+		return errors.New("cannot update values without a unique key")
 	}
 
-	val := reflect.ValueOf(obj).Elem()
+	for _, obj := range target {
+		// check for changed values
+		upd := make(map[string]any)
 
-	for _, col := range t.fields {
-		// grab state value
-		stv, ok := st.val[col.column]
-		if !ok {
-			// can't check because that column wasn't fetched → bad
-			//log.Printf("[psql] HasChanged can't check value for %s", col.column)
-			return true
+		val := reflect.ValueOf(obj).Elem()
+
+		st := t.rowstate(obj)
+		if st == nil || !st.init {
+			// we don't have a state → update everything
+			for _, f := range t.fields {
+				upd[f.column] = val.Field(f.index).Interface()
+			}
+		} else {
+			for _, f := range t.fields {
+				// grab state value
+				stv, ok := st.val[f.column]
+				newv := val.Field(f.index).Interface()
+
+				if !ok {
+					// no value in state → just force update
+					upd[f.column] = newv
+					continue
+				}
+				if !reflect.DeepEqual(newv, stv) {
+					upd[f.column] = newv
+				}
+			}
 		}
-		if !reflect.DeepEqual(val.Field(col.index).Interface(), stv) {
-			//log.Printf("[psql] found diff in field %s: %v != %v", col.column, val.Field(col.index).Interface(), stv)
-			return true
+		if len(upd) == 0 {
+			// no update needed
+			continue
+		}
+		// perform update
+		req := "UPDATE " + QuoteName(t.table) + " SET "
+		var flds []any
+		first := true
+		for k, v := range upd {
+			if !first {
+				req += ", "
+			} else {
+				first = false
+			}
+			req += QuoteName(k) + " = ?"
+			flds = append(flds, v)
+		}
+		req += " WHERE "
+		first = true
+		// render key
+		for _, col := range t.mainKey.fields {
+			if !first {
+				req += " AND "
+			} else {
+				first = false
+			}
+			req += QuoteName(col) + " = ?"
+			flds = append(flds, val.Field(t.fldcol[col].index).Interface())
+		}
+
+		_, err := db.Exec(req, flds...)
+		if err != nil {
+			return err
+		}
+		if st != nil {
+			// update state since update was successful
+			for k, v := range upd {
+				st.val[k] = v
+			}
 		}
 	}
-
-	return false
+	return nil
 }

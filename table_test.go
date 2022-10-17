@@ -110,4 +110,26 @@ func TestSQL(t *testing.T) {
 	if !psql.HasChanged(v3) {
 		t.Errorf("Update 42 does not report changes")
 	}
+
+	err = psql.Update(context.Background(), v3)
+	if err != nil {
+		t.Fatalf("failed to update 42: %s", err)
+	}
+
+	// shouldn't be changed anymore
+	if psql.HasChanged(v3) {
+		t.Errorf("Reports changes despite no changes yet")
+	}
+
+	var v4 = &TestTable1b{}
+
+	// Re-fetch 42
+	err = psql.FetchOne(context.Background(), v4, map[string]any{"Key": 42})
+	if err != nil {
+		t.Fatalf("failed to fetch 42: %s", err)
+	}
+
+	if v4.Name != "Updated name" {
+		t.Errorf("failed to update name for 42")
+	}
 }
