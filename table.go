@@ -245,7 +245,7 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 			return fmt.Errorf("on field %s: %w", fld.name, err)
 		}
 		if st != nil {
-			v := reflect.New(f.Type())
+			v := reflect.New(f.Type()).Elem()
 			vp := v
 			for vp.Kind() == reflect.Ptr {
 				if vp.IsNil() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"reflect"
 )
 
 // Update is a short way to insert objects into database
@@ -44,17 +45,21 @@ func (t *TableMeta[T]) HasChanged(obj *T) bool {
 		return true
 	}
 
+	val := reflect.ValueOf(obj).Elem()
+
 	for _, col := range t.fields {
 		// grab state value
 		stv, ok := st.val[col.column]
 		if !ok {
 			// can't check because that column wasn't fetched → bad
-			log.Printf("[psql] HasChanged can't check value for %s", col.column)
+			//log.Printf("[psql] HasChanged can't check value for %s", col.column)
 			return true
 		}
-		// convert from
-		_ = stv
+		if !reflect.DeepEqual(val.Field(col.index).Interface(), stv) {
+			//log.Printf("[psql] found diff in field %s: %v != %v", col.column, val.Field(col.index).Interface(), stv)
+			return true
+		}
 	}
 
-	return true
+	return false
 }
