@@ -10,7 +10,7 @@ After defining a structure, you can use it to load/save data from database.
 
 ```go
 type Table1 struct {
-	Key uint64
+	Key uint64 `sql:",key=PRIMARY"`
 	Name string `sql:"Name,type=VARCHAR,size=64"`
 }
 
