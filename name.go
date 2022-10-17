@@ -11,4 +11,13 @@ var nameType = reflect.TypeOf(Name{})
 // TableName psql.Name `sql:"X"`
 // ...
 // }
-type Name struct{}
+type Name struct {
+	st *rowState
+}
+
+func (n *Name) state() *rowState {
+	if n.st == nil {
+		n.st = &rowState{}
+	}
+	return n.st
+}

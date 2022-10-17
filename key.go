@@ -16,7 +16,14 @@ var keyType = reflect.TypeOf(Key{})
 // ...
 // }
 type Key struct {
-	state *rowState
+	st *rowState
+}
+
+func (k *Key) state() *rowState {
+	if k.st == nil {
+		k.st = &rowState{}
+	}
+	return k.st
 }
 
 const (

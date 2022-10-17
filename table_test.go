@@ -100,7 +100,7 @@ func TestSQL(t *testing.T) {
 		t.Fatalf("failed to fetch 42: %s", err)
 	}
 
-	if !psql.HasChanged(v3) {
+	if psql.HasChanged(v3) {
 		t.Errorf("Reports changes despite no changes yet")
 	}
 

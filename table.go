@@ -17,6 +17,7 @@ type TableMeta[T any] struct {
 	keys    []*structKey
 	mainKey *structKey
 	fldStr  string // string of all fields
+	state   int
 	attrs   map[string]string
 }
 
@@ -48,6 +49,7 @@ func Table[T any]() *TableMeta[T] {
 		table:  FormatTableName(typ.Name()),
 		fldcol: make(map[string]*structField),
 		attrs:  make(map[string]string),
+		state:  -1,
 	}
 
 	cnt := typ.NumField()
@@ -55,6 +57,9 @@ func Table[T any]() *TableMeta[T] {
 	extraKeys := make(map[string]*structKey)
 
 	for i := 0; i < cnt; i += 1 {
+		if !typ.Field(i).IsExported() {
+			continue
+		}
 		finfo := typ.Field(i)
 		col := finfo.Name
 		attrs := make(map[string]string)
@@ -79,8 +84,14 @@ func Table[T any]() *TableMeta[T] {
 			// this is actually the name of the table
 			info.table = col
 			info.attrs = attrs
+			if info.state == -1 {
+				info.state = i
+			}
 			continue
 		case keyType:
+			if info.state == -1 {
+				info.state = i
+			}
 			key := &structKey{
 				index: i,
 				name:  finfo.Name,
@@ -176,6 +187,7 @@ func (t *TableMeta[T]) ScanTo(row *sql.Rows, v *T) error {
 
 func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 	val := reflect.ValueOf(target).Elem()
+	st := t.rowstate(target)
 
 	// Make a slice for the values, and a reference interface slice
 	cols, err := rows.Columns()
@@ -195,6 +207,11 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 	if err != nil {
 		log.Printf("scan err %s", err)
 		return err
+	}
+
+	if st != nil {
+		st.init = true
+		st.val = make(map[string]any)
 	}
 
 	// perform set
@@ -226,6 +243,18 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 		err = fld.setter(f, values[i])
 		if err != nil {
 			return fmt.Errorf("on field %s: %w", fld.name, err)
+		}
+		if st != nil {
+			v := reflect.New(f.Type())
+			vp := v
+			for vp.Kind() == reflect.Ptr {
+				if vp.IsNil() {
+					vp.Set(reflect.New(vp.Type().Elem()))
+				}
+				vp = vp.Elem()
+			}
+			fld.setter(vp, values[i])
+			st.val[cols[i]] = dupv(v.Interface())
 		}
 	}
 

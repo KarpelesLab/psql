@@ -3,6 +3,7 @@ package psql
 import (
 	"context"
 	"errors"
+	"log"
 )
 
 // Update is a short way to insert objects into database
@@ -30,12 +31,30 @@ func HasChanged[T any](obj *T) bool {
 	return Table[T]().HasChanged(obj)
 }
 
-func (t *TableMeta[T]) HasChanged(obj any) bool {
-	if t.mainKey == nil {
+func (t *TableMeta[T]) HasChanged(obj *T) bool {
+	st := t.rowstate(obj)
+	if st == nil {
 		// no main key → always report changed
+		log.Printf("[psql] HasChanged but no state")
+		return true
+	}
+	if !st.init {
+		// uninitialized → no state
+		log.Printf("[psql] HasChanged on non initialized value")
 		return true
 	}
 
-	// TODO
+	for _, col := range t.fields {
+		// grab state value
+		stv, ok := st.val[col.column]
+		if !ok {
+			// can't check because that column wasn't fetched → bad
+			log.Printf("[psql] HasChanged can't check value for %s", col.column)
+			return true
+		}
+		// convert from
+		_ = stv
+	}
+
 	return true
 }
