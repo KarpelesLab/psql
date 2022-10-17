@@ -91,9 +91,14 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			return err
 		}
 		if st != nil {
-			// update state since update was successful
-			for k, v := range upd {
-				st.val[k] = v
+			if st.init {
+				// update state since update was successful
+				for k, v := range upd {
+					st.val[k] = v
+				}
+			} else {
+				st.init = true
+				st.val = upd
 			}
 		}
 	}
