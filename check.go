@@ -116,6 +116,9 @@ func (t *TableMeta[T]) checkStructure() error {
 	// TODO: SHOW TABLE STATUS LIKE 'table'
 	// → check Engine
 
+	// TODO: SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = %database AND `TABLE_SCHEMA` = %database AND `TABLE_NAME` = %table AND `CONSTRAINT_TYPE` = 'FOREIGN KEY'
+	// → check foreign keys
+
 	if len(alterData) > 0 {
 		s := &strings.Builder{}
 		s.WriteString("ALTER TABLE ")
