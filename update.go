@@ -71,7 +71,7 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 				first = false
 			}
 			req += QuoteName(k) + " = ?"
-			flds = append(flds, v)
+			flds = append(flds, export(v))
 		}
 		req += " WHERE "
 		first = true
@@ -83,7 +83,7 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 				first = false
 			}
 			req += QuoteName(col) + " = ?"
-			flds = append(flds, val.Field(t.fldcol[col].index).Interface())
+			flds = append(flds, export(val.Field(t.fldcol[col].index).Interface()))
 		}
 
 		_, err := db.Exec(req, flds...)
