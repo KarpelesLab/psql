@@ -8,23 +8,39 @@ import (
 	"strings"
 )
 
-func FetchOne[T any](ctx context.Context, target *T, where map[string]any) error {
-	return Table[T]().FetchOne(ctx, target, where)
+type FetchOptions struct {
+	Lock bool
+}
+
+var FetchLock = &FetchOptions{Lock: true}
+
+func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
+	res := &FetchOptions{}
+	for _, opt := range opts {
+		if opt.Lock {
+			res.Lock = true
+		}
+	}
+	return res
+}
+
+func FetchOne[T any](ctx context.Context, target *T, where map[string]any, opts ...*FetchOptions) error {
+	return Table[T]().FetchOne(ctx, target, where, opts...)
 }
 
 // Get will instanciate a new object of type T and return a pointer to it after loading from database
-func Get[T any](ctx context.Context, where map[string]any) (*T, error) {
-	return Table[T]().Get(ctx, where)
+func Get[T any](ctx context.Context, where map[string]any, opts ...*FetchOptions) (*T, error) {
+	return Table[T]().Get(ctx, where, opts...)
 }
 
-func Fetch[T any](ctx context.Context, where map[string]any) ([]*T, error) {
-	return Table[T]().Fetch(ctx, where)
+func Fetch[T any](ctx context.Context, where map[string]any, opts ...*FetchOptions) ([]*T, error) {
+	return Table[T]().Fetch(ctx, where, opts...)
 }
 
-func (t *TableMeta[T]) Get(ctx context.Context, where map[string]interface{}) (*T, error) {
+func (t *TableMeta[T]) Get(ctx context.Context, where map[string]any, opts ...*FetchOptions) (*T, error) {
 	// simplified get
 	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []interface{}
+	var params []any
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
@@ -36,6 +52,11 @@ func (t *TableMeta[T]) Get(ctx context.Context, where map[string]interface{}) (*
 		}
 	}
 	req += " LIMIT 1"
+
+	opt := resolveFetchOpts(opts)
+	if opt.Lock {
+		req += " FOR UPDATE"
+	}
 
 	// run query
 	rows, err := doQueryContext(ctx, req, params...)
@@ -52,7 +73,9 @@ func (t *TableMeta[T]) Get(ctx context.Context, where map[string]interface{}) (*
 	return t.spawn(rows)
 }
 
-func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string]interface{}) error {
+func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string]any, opts ...*FetchOptions) error {
+	opt := resolveFetchOpts(opts)
+
 	// grab fields from target
 	if target == nil {
 		return fmt.Errorf("FetchOne requires a non-nil target")
@@ -60,7 +83,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 
 	// SELECT QUERY
 	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []interface{}
+	var params []any
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
@@ -72,6 +95,9 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 		}
 	}
 	req += " LIMIT 1"
+	if opt.Lock {
+		req += " FOR UPDATE"
+	}
 
 	// run query
 	rows, err := doQueryContext(ctx, req, params...)
@@ -90,10 +116,12 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 	return err
 }
 
-func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]interface{}) ([]*T, error) {
+func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...*FetchOptions) ([]*T, error) {
+	opt := resolveFetchOpts(opts)
+
 	// SELECT QUERY
 	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []interface{}
+	var params []any
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
@@ -103,6 +131,10 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]interface{}) 
 		if len(whQ) > 0 {
 			req += " WHERE " + strings.Join(whQ, " AND ")
 		}
+	}
+
+	if opt.Lock {
+		req += " FOR UPDATE"
 	}
 
 	// run query
