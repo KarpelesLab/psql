@@ -9,6 +9,9 @@ import (
 
 // export transforms various known types to types easier to handle for MySQL
 func export(in any) any {
+	if in == nil {
+		return nil
+	}
 	switch v := in.(type) {
 	case time.Time:
 		if v.IsZero() {
