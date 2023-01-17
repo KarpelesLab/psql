@@ -27,7 +27,7 @@ func Insert[T any](ctx context.Context, target ...*T) error {
 func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	// INSERT QUERY
 	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
-	stmt, err := db.PrepareContext(ctx, req)
+	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
 		return &Error{Query: req, Err: err}
@@ -69,7 +69,7 @@ func InsertIgnore[T any](ctx context.Context, target ...*T) error {
 func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	// INSERT IGNORE QUERY
 	req := "INSERT IGNORE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
-	stmt, err := db.PrepareContext(ctx, req)
+	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
 		return &Error{Query: req, Err: err}

@@ -30,7 +30,7 @@ func Query(q *SQLQuery, cb func(*sql.Rows) error) error {
 }
 
 func QueryContext(ctx context.Context, q *SQLQuery, cb func(*sql.Rows) error) error {
-	r, err := db.QueryContext(ctx, q.Query, q.Args...)
+	r, err := doQueryContext(ctx, q.Query, q.Args...)
 	if err != nil {
 		return err
 	}

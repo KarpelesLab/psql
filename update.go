@@ -86,7 +86,7 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			flds = append(flds, export(val.Field(t.fldcol[col].index).Interface()))
 		}
 
-		_, err := db.Exec(req, flds...)
+		_, err := doExecContext(ctx, req, flds...)
 		if err != nil {
 			return err
 		}

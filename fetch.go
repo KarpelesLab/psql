@@ -38,7 +38,7 @@ func (t *TableMeta[T]) Get(ctx context.Context, where map[string]interface{}) (*
 	req += " LIMIT 1"
 
 	// run query
-	rows, err := db.QueryContext(ctx, req, params...)
+	rows, err := doQueryContext(ctx, req, params...)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
 		return nil, &Error{Query: req, Err: err}
@@ -74,7 +74,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 	req += " LIMIT 1"
 
 	// run query
-	rows, err := db.QueryContext(ctx, req, params...)
+	rows, err := doQueryContext(ctx, req, params...)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
 		return &Error{Query: req, Err: err}
@@ -106,7 +106,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]interface{}) 
 	}
 
 	// run query
-	rows, err := db.QueryContext(ctx, req, params...)
+	rows, err := doQueryContext(ctx, req, params...)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
 		return nil, &Error{Query: req, Err: err}
