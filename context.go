@@ -35,6 +35,42 @@ func ContextTx(ctx context.Context, tx *sql.Tx) context.Context {
 	return &ctxValueObj{ctx, tx}
 }
 
+// Tx can be used to run a function inside a sql transaction for isolation/etc
+func Tx(ctx context.Context, cb func(ctx context.Context) error) error {
+	tx, err := BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	ctx = ContextTx(ctx, tx)
+	err = cb(ctx)
+	if err == nil {
+		return tx.Commit()
+	}
+	return err
+}
+
+func BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+	obj := ctx.Value(ctxDataObj)
+	if obj == nil {
+		return db.BeginTx(ctx, opts)
+	}
+
+	switch o := obj.(type) {
+	case *sql.Conn:
+		return o.BeginTx(ctx, opts)
+	case *sql.DB:
+		return o.BeginTx(ctx, opts)
+	case interface {
+		BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+	}:
+		return o.BeginTx(ctx, opts)
+	default:
+		return db.BeginTx(ctx, opts)
+	}
+}
+
 func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
