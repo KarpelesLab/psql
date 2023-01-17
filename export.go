@@ -18,6 +18,11 @@ func export(in any) any {
 			return "0000-00-00 00:00:00.000000"
 		}
 		return v.UTC().Format("2006-01-02 15:04:05.999999")
+	case *time.Time:
+		if v == nil {
+			return nil
+		}
+		return export(*v)
 	case fmt.Stringer:
 		return v.String()
 	case driver.Valuer:
