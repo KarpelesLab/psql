@@ -57,7 +57,7 @@ func TestSQL(t *testing.T) {
 	var v3 = &TestTable1b{}
 
 	// we don't allow passing a pointer there anymore
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 42})
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": []any{42}})
 	if err != nil {
 		t.Fatalf("failed to fetch 42: %s", err)
 	}

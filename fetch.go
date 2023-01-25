@@ -44,8 +44,31 @@ func (t *TableMeta[T]) Get(ctx context.Context, where map[string]any, opts ...*F
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
-			whQ = append(whQ, QuoteName(k)+"=?")
-			params = append(params, v)
+			switch rv := v.(type) {
+			case []string:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			case []any:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			default:
+				whQ = append(whQ, QuoteName(k)+"=?")
+				params = append(params, v)
+			}
 		}
 		if len(whQ) > 0 {
 			req += " WHERE " + strings.Join(whQ, " AND ")
@@ -87,8 +110,31 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
-			whQ = append(whQ, QuoteName(k)+"=?")
-			params = append(params, v)
+			switch rv := v.(type) {
+			case []string:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			case []any:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			default:
+				whQ = append(whQ, QuoteName(k)+"=?")
+				params = append(params, v)
+			}
 		}
 		if len(whQ) > 0 {
 			req += " WHERE " + strings.Join(whQ, " AND ")
@@ -125,8 +171,31 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...
 	if where != nil {
 		var whQ []string
 		for k, v := range where {
-			whQ = append(whQ, QuoteName(k)+"=?")
-			params = append(params, v)
+			switch rv := v.(type) {
+			case []string:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			case []any:
+				// IN (...)
+				repQ := make([]string, len(rv))
+				for n := range repQ {
+					repQ[n] = "?"
+				}
+				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
+				for _, sv := range rv {
+					params = append(params, sv)
+				}
+			default:
+				whQ = append(whQ, QuoteName(k)+"=?")
+				params = append(params, v)
+			}
 		}
 		if len(whQ) > 0 {
 			req += " WHERE " + strings.Join(whQ, " AND ")
