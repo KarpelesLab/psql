@@ -9,7 +9,25 @@ import (
 )
 
 type FetchOptions struct {
-	Lock bool
+	Lock       bool
+	LimitCount int      // number of results to return if >0
+	LimitStart int      // seek first record if >0
+	Sort       []string // fields to sort by (TODO)
+}
+
+func Sort(fields ...string) *FetchOptions {
+	return &FetchOptions{Sort: fields}
+}
+
+func Limit(cnt int) *FetchOptions {
+	return &FetchOptions{LimitCount: cnt}
+}
+
+func LimitFrom(start, cnt int) *FetchOptions {
+	return &FetchOptions{
+		LimitCount: cnt,
+		LimitStart: start,
+	}
 }
 
 var FetchLock = &FetchOptions{Lock: true}
@@ -19,6 +37,12 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 	for _, opt := range opts {
 		if opt.Lock {
 			res.Lock = true
+		}
+		if opt.LimitCount > 0 {
+			res.LimitCount = opt.LimitCount
+		}
+		if opt.LimitStart > 0 {
+			res.LimitStart = opt.LimitStart
 		}
 	}
 	return res
@@ -199,6 +223,18 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...
 		}
 		if len(whQ) > 0 {
 			req += " WHERE " + strings.Join(whQ, " AND ")
+		}
+	}
+
+	if len(opt.Sort) > 0 {
+		// add sort (TODO)
+	}
+
+	if opt.LimitCount > 0 {
+		if opt.LimitStart > 0 {
+			req += fmt.Sprintf(" LIMIT %d, %d", opt.LimitStart, opt.LimitCount)
+		} else {
+			req += fmt.Sprintf(" LIMIT %d", opt.LimitCount)
 		}
 	}
 
