@@ -31,6 +31,9 @@ func export(in any) any {
 		val := reflect.ValueOf(in)
 		if val.Type().Kind() == reflect.Ptr {
 			// retry but dererence value
+			if val.IsNil() {
+				return nil
+			}
 			return export(val.Elem().Interface())
 		}
 		return in
