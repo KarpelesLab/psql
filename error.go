@@ -78,4 +78,7 @@ func ErrorNumber(err error) uint16 {
 	}
 }
 
-var ErrNotNillable = errors.New("field is nil but cannot be nil")
+var (
+	ErrNotNillable        = errors.New("field is nil but cannot be nil")
+	ErrTxAlreadyProcessed = errors.New("transaction has already been committed or rollbacked")
+)

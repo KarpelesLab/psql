@@ -31,7 +31,7 @@ func ContextConn(ctx context.Context, conn *sql.Conn) context.Context {
 	return &ctxValueObj{ctx, conn}
 }
 
-func ContextTx(ctx context.Context, tx *sql.Tx) context.Context {
+func ContextTx(ctx context.Context, tx *TxProxy) context.Context {
 	return &ctxValueObj{ctx, tx}
 }
 
@@ -51,23 +51,25 @@ func Tx(ctx context.Context, cb func(ctx context.Context) error) error {
 	return err
 }
 
-func BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
-		return db.BeginTx(ctx, opts)
+		return newTxCtrl(db.BeginTx(ctx, opts))
 	}
 
 	switch o := obj.(type) {
 	case *sql.Conn:
-		return o.BeginTx(ctx, opts)
+		return newTxCtrl(o.BeginTx(ctx, opts))
 	case *sql.DB:
+		return newTxCtrl(o.BeginTx(ctx, opts))
+	case *TxProxy:
 		return o.BeginTx(ctx, opts)
 	case interface {
 		BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 	}:
-		return o.BeginTx(ctx, opts)
+		return newTxCtrl(o.BeginTx(ctx, opts))
 	default:
-		return db.BeginTx(ctx, opts)
+		return newTxCtrl(db.BeginTx(ctx, opts))
 	}
 }
 
@@ -79,6 +81,8 @@ func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, 
 
 	switch o := obj.(type) {
 	case *sql.Tx:
+		return o.ExecContext(ctx, query, args...)
+	case *TxProxy:
 		return o.ExecContext(ctx, query, args...)
 	case *sql.Conn:
 		return o.ExecContext(ctx, query, args...)
@@ -103,6 +107,8 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 	switch o := obj.(type) {
 	case *sql.Tx:
 		return o.QueryContext(ctx, query, args...)
+	case *TxProxy:
+		return o.QueryContext(ctx, query, args...)
 	case *sql.Conn:
 		return o.QueryContext(ctx, query, args...)
 	case *sql.DB:
@@ -125,6 +131,8 @@ func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 
 	switch o := obj.(type) {
 	case *sql.Tx:
+		return o.PrepareContext(ctx, query)
+	case *TxProxy:
 		return o.PrepareContext(ctx, query)
 	case *sql.Conn:
 		return o.PrepareContext(ctx, query)
