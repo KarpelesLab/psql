@@ -141,6 +141,8 @@ func timeSetter(v reflect.Value, from sql.RawBytes) error {
 			v.Set(reflect.ValueOf(time.Time{}))
 			return nil
 		}
+
+		// In the absence of a time zone indicator, Parse returns a time in UTC.
 		t, err := time.Parse(base[:len(from)], string(from))
 		if err != nil {
 			return err
