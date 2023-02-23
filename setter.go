@@ -38,6 +38,10 @@ func findSetter(t reflect.Type) func(v reflect.Value, from sql.RawBytes) error {
 		return uint32Setter
 	case reflect.Uint64:
 		return uint64Setter
+	case reflect.Float32:
+		return float32Setter
+	case reflect.Float64:
+		return float64Setter
 	default:
 		panic(fmt.Sprintf("no setter for type %s", t))
 	}
@@ -104,6 +108,24 @@ func uint64Setter(v reflect.Value, from sql.RawBytes) error {
 		return err
 	}
 	v.SetUint(n)
+	return nil
+}
+
+func float32Setter(v reflect.Value, from sql.RawBytes) error {
+	n, err := strconv.ParseFloat(string(from), 32)
+	if err != nil {
+		return err
+	}
+	v.SetFloat(n)
+	return nil
+}
+
+func float64Setter(v reflect.Value, from sql.RawBytes) error {
+	n, err := strconv.ParseFloat(string(from), 64)
+	if err != nil {
+		return err
+	}
+	v.SetFloat(n)
 	return nil
 }
 
