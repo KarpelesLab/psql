@@ -61,7 +61,7 @@ func (c *txController) beginSubTx(ctx context.Context, opts *sql.TxOptions) (*Tx
 }
 
 func (tx *TxProxy) Commit() error {
-	if atomic.AddUint64(&tx.once, 1) != 0 {
+	if atomic.AddUint64(&tx.once, 1) != 1 {
 		return ErrTxAlreadyProcessed
 	}
 
@@ -87,7 +87,7 @@ func (c *txController) commit(depth int) error {
 }
 
 func (tx *TxProxy) Rollback() error {
-	if atomic.AddUint64(&tx.once, 1) != 0 {
+	if atomic.AddUint64(&tx.once, 1) != 1 {
 		return ErrTxAlreadyProcessed
 	}
 
