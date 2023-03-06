@@ -7,7 +7,7 @@ type Comparison struct {
 	Op   string // one of "=", "<", ">", etc...
 }
 
-func Equal(a, b any) *Comparison {
+func Equal(a, b any) EscapeValueable {
 	return &Comparison{a, b, "="}
 }
 
@@ -18,4 +18,8 @@ func (c *Comparison) EscapeValue() string {
 	b.WriteString(c.Op)
 	b.WriteString(Escape(c.B))
 	return b.String()
+}
+
+func (c *Comparison) sortEscapeValue() string {
+	return c.EscapeValue()
 }

@@ -23,3 +23,17 @@ func (ctx *renderContext) appendCommaValues(vals ...any) error {
 	ctx.append(b.String())
 	return nil
 }
+
+func (ctx *renderContext) appendCommaValuesSort(vals ...SortValueable) error {
+	b := &strings.Builder{}
+
+	for n, v := range vals {
+		if n != 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(v.sortEscapeValue())
+	}
+
+	ctx.append(b.String())
+	return nil
+}

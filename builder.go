@@ -11,21 +11,26 @@ type EscapeValueable interface {
 	EscapeValue() string
 }
 
+// SortValueable is a kind of value that can be used for sorting
+type SortValueable interface {
+	sortEscapeValue() string
+}
+
 // EscapeTableable is a type of value that can be used as a table
 type EscapeTableable interface {
 	EscapeTable() string
 }
 
 type QueryBuilder struct {
-	Query      string
-	Fields     []any
-	Tables     []EscapeTableable
-	FieldsSet  []any
-	WhereData  WhereAND
-	GroupBy    []any
-	OrderBy    []any
-	Limit      []int
-	renderData []any // values?
+	Query       string
+	Fields      []any
+	Tables      []EscapeTableable
+	FieldsSet   []any
+	WhereData   WhereAND
+	GroupBy     []any
+	OrderByData []SortValueable
+	Limit       []int
+	renderData  []any // values?
 
 	// flags
 	Distinct      bool
@@ -123,6 +128,11 @@ func (q *QueryBuilder) Set(fields ...any) *QueryBuilder {
 
 func (q *QueryBuilder) Where(where ...any) *QueryBuilder {
 	q.WhereData = append(q.WhereData, where...)
+	return q
+}
+
+func (q *QueryBuilder) OrderBy(field ...SortValueable) *QueryBuilder {
+	q.OrderByData = append(q.OrderByData, field...)
 	return q
 }
 
@@ -224,9 +234,9 @@ func (q *QueryBuilder) Render() (string, error) {
 			return "", err
 		}
 	}
-	if len(q.OrderBy) > 0 {
+	if len(q.OrderByData) > 0 {
 		ctx.append("ORDER BY")
-		err = ctx.appendCommaValues(q.OrderBy...)
+		err = ctx.appendCommaValuesSort(q.OrderByData...)
 		if err != nil {
 			return "", err
 		}

@@ -30,7 +30,33 @@ func F(field ...string) EscapeValueable {
 	}
 }
 
+func S(field ...string) SortValueable {
+	// same as F but last value must be "ASC" or "DESC"
+	if len(field) == 0 {
+		panic("psql.S() expects at least one arg, got none")
+	}
+	last := field[len(field)-1]
+	switch last {
+	case "ASC", "DESC":
+		return &ordField{ord: last, fld: F(field[:len(field)-1]...)}
+	default:
+		return &ordField{ord: "", fld: F(field...)}
+	}
+}
+
 type fieldName string
+
+type ordField struct {
+	ord string // "ASC" or "DESC"
+	fld EscapeValueable
+}
+
+func (f *ordField) sortEscapeValue() string {
+	if f.ord == "" {
+		return f.fld.EscapeValue()
+	}
+	return f.fld.EscapeValue() + " " + f.ord
+}
 
 type fullField struct {
 	tableName
@@ -50,6 +76,10 @@ func (f fieldName) EscapeValue() string {
 	return NameQuoteChar + strings.Replace(strings.ReplaceAll(string(f), NameQuoteChar, NameQuoteChar+NameQuoteChar), ".", NameQuoteChar+"."+NameQuoteChar, 1) + NameQuoteChar
 }
 
+func (f fieldName) sortEscapeValue() string {
+	return f.EscapeValue()
+}
+
 func (f *fullField) String() string {
 	return f.EscapeValue()
 }
@@ -59,6 +89,10 @@ func (f *fullField) EscapeValue() string {
 		return QuoteName(string(f.fieldName))
 	}
 	return NameQuoteChar + strings.ReplaceAll(string(f.tableName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar + "." + NameQuoteChar + strings.ReplaceAll(string(f.fieldName), NameQuoteChar, NameQuoteChar+NameQuoteChar) + NameQuoteChar
+}
+
+func (f *fullField) sortEscapeValue() string {
+	return f.EscapeValue()
 }
 
 type tableName string

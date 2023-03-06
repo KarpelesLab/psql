@@ -31,7 +31,11 @@ func (r *rawValue) EscapeValue() string {
 	return r.V
 }
 
-func Raw(s string) any {
+func (r *rawValue) sortEscapeValue() string {
+	return r.V
+}
+
+func Raw(s string) EscapeValueable {
 	return &rawValue{s}
 }
 
@@ -50,4 +54,8 @@ func (s *Set) EscapeValue() string {
 	b.WriteByte('=')
 	b.WriteString(Escape(s.V))
 	return b.String()
+}
+
+func (s *Set) sortEscapeValue() string {
+	return s.EscapeValue()
 }

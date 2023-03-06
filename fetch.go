@@ -10,12 +10,12 @@ import (
 
 type FetchOptions struct {
 	Lock       bool
-	LimitCount int      // number of results to return if >0
-	LimitStart int      // seek first record if >0
-	Sort       []string // fields to sort by (TODO)
+	LimitCount int             // number of results to return if >0
+	LimitStart int             // seek first record if >0
+	Sort       []SortValueable // fields to sort by
 }
 
-func Sort(fields ...string) *FetchOptions {
+func Sort(fields ...SortValueable) *FetchOptions {
 	return &FetchOptions{Sort: fields}
 }
 
@@ -43,6 +43,9 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 		}
 		if opt.LimitStart > 0 {
 			res.LimitStart = opt.LimitStart
+		}
+		if len(opt.Sort) > 0 {
+			res.Sort = append(res.Sort, opt.Sort...)
 		}
 	}
 	return res
@@ -228,6 +231,13 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...
 
 	if len(opt.Sort) > 0 {
 		// add sort (TODO)
+		req += "ORDER BY "
+		for n, o := range opt.Sort {
+			if n >= 0 {
+				req += ", "
+			}
+			req += o.sortEscapeValue()
+		}
 	}
 
 	if opt.LimitCount > 0 {
