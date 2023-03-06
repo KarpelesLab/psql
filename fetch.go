@@ -233,7 +233,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...
 		// add sort (TODO)
 		req += "ORDER BY "
 		for n, o := range opt.Sort {
-			if n >= 0 {
+			if n > 0 {
 				req += ", "
 			}
 			req += o.sortEscapeValue()
