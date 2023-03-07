@@ -36,6 +36,15 @@ func (c *Comparison) EscapeValue() string {
 	return b.String()
 }
 
+func (c *Comparison) escapeValueCtx(ctx *renderContext) string {
+	// A Op B
+	b := &strings.Builder{}
+	b.WriteString(escapeCtx(ctx, c.A))
+	b.WriteString(c.Op)
+	b.WriteString(escapeCtx(ctx, c.B))
+	return b.String()
+}
+
 func (c *Comparison) sortEscapeValue() string {
 	return c.EscapeValue()
 }

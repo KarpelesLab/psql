@@ -11,6 +11,10 @@ type EscapeValueable interface {
 	EscapeValue() string
 }
 
+type escapeValueCtxable interface {
+	escapeValueCtx(ctx *renderContext) string
+}
+
 // SortValueable is a kind of value that can be used for sorting
 type SortValueable interface {
 	sortEscapeValue() string
@@ -137,14 +141,32 @@ func (q *QueryBuilder) OrderBy(field ...SortValueable) *QueryBuilder {
 }
 
 func (q *QueryBuilder) Render() (string, error) {
+	// Generate the actual SQL query
+	ctx := &renderContext{useArgs: false}
+	err := q.render(ctx)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(ctx.req, " "), nil
+}
+
+func (q *QueryBuilder) RenderArgs() (string, []any, error) {
+	// Generate the actual SQL query
+	ctx := &renderContext{useArgs: true}
+	err := q.render(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	return strings.Join(ctx.req, " "), ctx.args, nil
+}
+
+func (q *QueryBuilder) render(ctx *renderContext) error {
 	if q.err != nil {
-		return "", q.err
+		return q.err
 	}
 
 	// Generate the actual SQL query
-	ctx := &renderContext{
-		req: []string{q.Query},
-	}
+	ctx.req = []string{q.Query}
 	var err error
 
 	switch q.Query {
@@ -157,18 +179,18 @@ func (q *QueryBuilder) Render() (string, error) {
 		}
 		err = q.renderFields(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 		ctx.append("FROM")
 		err = q.renderTables(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 	case "DELETE":
 		ctx.append("FROM")
 		err = q.renderTables(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 	case "UPDATE":
 		if q.UpdateIgnore {
@@ -178,13 +200,10 @@ func (q *QueryBuilder) Render() (string, error) {
 	case "REPLACE":
 		err = q.renderTables(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 		ctx.append("SET")
-		err = ctx.appendCommaValues(q.FieldsSet...)
-		if err != nil {
-			return "", err
-		}
+		ctx.append(escapeWhere(ctx, q.FieldsSet, ","))
 	case "INSERT":
 		if q.InsertIgnore {
 			ctx.append("IGNORE")
@@ -192,16 +211,13 @@ func (q *QueryBuilder) Render() (string, error) {
 		ctx.append("INTO")
 		err = q.renderTables(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 		ctx.append("SET")
-		err = ctx.appendCommaValues(q.FieldsSet...)
-		if err != nil {
-			return "", err
-		}
+		ctx.append(escapeWhere(ctx, q.FieldsSet, ","))
 	case "INSERT_SELECT":
 		if len(q.Tables) < 2 {
-			return "", fmt.Errorf("INSERT SELECT requires at least two tables")
+			return fmt.Errorf("INSERT SELECT requires at least two tables")
 		}
 		ctx.req = []string{"INSERT"}
 		if q.InsertIgnore {
@@ -215,30 +231,30 @@ func (q *QueryBuilder) Render() (string, error) {
 		}
 		err = q.renderFields(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 		ctx.append("FROM")
 		err = q.renderTables(ctx)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	if len(q.WhereData) > 0 {
-		ctx.append("WHERE", q.WhereData.EscapeValue())
+		ctx.append("WHERE", q.WhereData.escapeValueCtx(ctx))
 	}
 	if len(q.GroupBy) > 0 {
 		ctx.append("GROUP BY")
 		err = ctx.appendCommaValues(q.GroupBy...)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 	if len(q.OrderByData) > 0 {
 		ctx.append("ORDER BY")
 		err = ctx.appendCommaValuesSort(q.OrderByData...)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 	switch len(q.Limit) {
@@ -251,7 +267,7 @@ func (q *QueryBuilder) Render() (string, error) {
 		ctx.append("FOR UPDATE")
 	}
 
-	return strings.Join(ctx.req, " "), nil
+	return nil
 }
 
 func (q *QueryBuilder) renderFields(ctx *renderContext) error {

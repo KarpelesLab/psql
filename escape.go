@@ -13,7 +13,26 @@ import (
 
 // Escape takes any value and transforms it into a string that can be included in a MySQL query
 func Escape(val any) string {
+	return escapeCtx(nil, val)
+}
+
+func escapeCtx(ctx *renderContext, val any) string {
+	if ctx != nil && ctx.useArgs {
+		switch v := val.(type) {
+		case *fullField, fieldName, tableName:
+			break // contnue below
+		case escapeValueCtxable:
+			return v.escapeValueCtx(ctx)
+		case *rawValue:
+			return v.V
+		default:
+			return ctx.appendArg(val)
+		}
+	}
+
 	switch v := val.(type) {
+	case escapeValueCtxable:
+		return v.escapeValueCtx(ctx)
 	case EscapeValueable:
 		return v.EscapeValue()
 	case int64:
@@ -48,7 +67,7 @@ func Escape(val any) string {
 			// wut
 			return ""
 		}
-		return Escape(sub)
+		return escapeCtx(ctx, sub)
 	case fmt.Stringer:
 		return v.String()
 	default:
@@ -73,20 +92,20 @@ func Escape(val any) string {
 		case reflect.Complex128:
 			return strconv.FormatComplex(rv.Complex(), 'g', -1, 128)
 		case reflect.String:
-			return Escape(rv.String())
+			return escapeCtx(ctx, rv.String())
 		// TODO: Array, Interface, Map, Slice, Struct
 		case reflect.Ptr:
 			if rv.IsNil() {
 				return "NULL"
 			}
-			return Escape(rv.Elem().Interface())
+			return escapeCtx(ctx, rv.Elem().Interface())
 		default:
 			return fmt.Sprintf("%v", val)
 		}
 	}
 }
 
-func EscapeWhereSub(key string, val any) string {
+func escapeWhereSub(ctx *renderContext, key string, val any) string {
 	b := &bytes.Buffer{}
 	b.WriteString(fieldName(key).EscapeValue())
 	not := false
@@ -102,7 +121,7 @@ func EscapeWhereSub(key string, val any) string {
 			b.WriteString(" NOT")
 		}
 		b.WriteString(" LIKE ")
-		b.WriteString(Escape(v.Like))
+		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
 		return b.String()
 	default:
@@ -111,65 +130,53 @@ func EscapeWhereSub(key string, val any) string {
 		} else {
 			b.WriteByte('=')
 		}
-		b.WriteString(Escape(val))
+		b.WriteString(escapeCtx(ctx, val))
 		return b.String()
 	}
 }
 
-func EscapeWhere(val any, glue string) string {
+func escapeWhere(ctx *renderContext, val any, glue string) string {
 	switch v := val.(type) {
 	case map[string]any:
 		// key = value
 		b := &bytes.Buffer{}
-		b.WriteByte('(')
 		first := true
 		for key, sub := range v {
 			if first {
 				first = false
 			} else {
-				b.WriteByte(' ')
 				b.WriteString(glue)
-				b.WriteByte(' ')
 			}
-			b.WriteString(EscapeWhereSub(key, sub))
+			b.WriteString(escapeWhereSub(ctx, key, sub))
 		}
-		b.WriteByte(')')
 		return b.String()
 	case []string:
 		// V, V, V...
 		b := &bytes.Buffer{}
-		b.WriteByte('(')
 		first := true
 		for _, sub := range v {
 			if first {
 				first = false
 			} else {
-				b.WriteByte(' ')
 				b.WriteString(glue)
-				b.WriteByte(' ')
 			}
-			b.WriteString(EscapeWhere(sub, glue))
+			b.WriteString(escapeWhere(ctx, sub, glue))
 		}
-		b.WriteByte(')')
 		return b.String()
 	case []any:
 		// V, V, V...
 		b := &bytes.Buffer{}
-		b.WriteByte('(')
 		first := true
 		for _, sub := range v {
 			if first {
 				first = false
 			} else {
-				b.WriteByte(' ')
 				b.WriteString(glue)
-				b.WriteByte(' ')
 			}
-			b.WriteString(EscapeWhere(sub, glue))
+			b.WriteString(escapeWhere(ctx, sub, glue))
 		}
-		b.WriteByte(')')
 		return b.String()
 	default:
-		return Escape(val)
+		return escapeCtx(ctx, val)
 	}
 }

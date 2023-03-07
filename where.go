@@ -1,6 +1,8 @@
 package psql
 
-import "strings"
+import (
+	"strings"
+)
 
 type WhereAND []any
 type WhereOR []any
@@ -10,6 +12,10 @@ func (w WhereAND) String() string {
 }
 
 func (w WhereAND) EscapeValue() string {
+	return w.escapeValueCtx(nil)
+}
+
+func (w WhereAND) escapeValueCtx(ctx *renderContext) string {
 	b := &strings.Builder{}
 
 	for n, v := range w {
@@ -17,7 +23,7 @@ func (w WhereAND) EscapeValue() string {
 			b.WriteString(" AND ")
 		}
 		b.WriteByte('(')
-		b.WriteString(EscapeWhere(v, "AND"))
+		b.WriteString(escapeWhere(ctx, v, " AND "))
 		b.WriteByte(')')
 	}
 
@@ -29,6 +35,10 @@ func (w WhereOR) String() string {
 }
 
 func (w WhereOR) EscapeValue() string {
+	return w.escapeValueCtx(nil)
+}
+
+func (w WhereOR) escapeValueCtx(ctx *renderContext) string {
 	b := &strings.Builder{}
 
 	for n, v := range w {
@@ -36,7 +46,7 @@ func (w WhereOR) EscapeValue() string {
 			b.WriteString(" OR ")
 		}
 		b.WriteByte('(')
-		b.WriteString(EscapeWhere(v, "OR"))
+		b.WriteString(escapeWhere(ctx, v, " OR "))
 		b.WriteByte(')')
 	}
 

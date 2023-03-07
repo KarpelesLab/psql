@@ -2,7 +2,6 @@ package psql
 
 import (
 	"database/sql/driver"
-	"strings"
 )
 
 type typeContainer struct {
@@ -37,27 +36,6 @@ func (r *rawValue) sortEscapeValue() string {
 
 func Raw(s string) EscapeValueable {
 	return &rawValue{s}
-}
-
-type Set struct {
-	K, V any
-}
-
-func (s *Set) EscapeValue() string {
-	b := &strings.Builder{}
-	switch v := s.K.(type) {
-	case string:
-		b.WriteString(Escape(fieldName(v)))
-	default:
-		b.WriteString(Escape(s.K))
-	}
-	b.WriteByte('=')
-	b.WriteString(Escape(s.V))
-	return b.String()
-}
-
-func (s *Set) sortEscapeValue() string {
-	return s.EscapeValue()
 }
 
 type Not struct {

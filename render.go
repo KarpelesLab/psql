@@ -3,7 +3,9 @@ package psql
 import "strings"
 
 type renderContext struct {
-	req []string
+	req     []string
+	args    []any
+	useArgs bool
 }
 
 func (ctx *renderContext) append(v ...string) {
@@ -17,7 +19,7 @@ func (ctx *renderContext) appendCommaValues(vals ...any) error {
 		if n != 0 {
 			b.WriteByte(',')
 		}
-		b.WriteString(Escape(v))
+		b.WriteString(escapeCtx(ctx, v))
 	}
 
 	ctx.append(b.String())
@@ -36,4 +38,12 @@ func (ctx *renderContext) appendCommaValuesSort(vals ...SortValueable) error {
 
 	ctx.append(b.String())
 	return nil
+}
+
+func (ctx *renderContext) appendArg(arg any) string {
+	if ctx.useArgs {
+		ctx.args = append(ctx.args, arg)
+		return "?"
+	}
+	return Escape(arg)
 }
