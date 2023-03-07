@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 )
 
 type FetchOptions struct {
@@ -66,53 +65,22 @@ func Fetch[T any](ctx context.Context, where map[string]any, opts ...*FetchOptio
 
 func (t *TableMeta[T]) Get(ctx context.Context, where map[string]any, opts ...*FetchOptions) (*T, error) {
 	// simplified get
-	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []any
+	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			switch rv := v.(type) {
-			case []string:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			case []any:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			default:
-				whQ = append(whQ, QuoteName(k)+"=?")
-				params = append(params, v)
-			}
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
+		req = req.Where(where)
 	}
-	req += " LIMIT 1"
+	req = req.Limit(1)
 
 	opt := resolveFetchOpts(opts)
 	if opt.Lock {
-		req += " FOR UPDATE"
+		req.ForUpdate = true
 	}
 
 	// run query
-	rows, err := doQueryContext(ctx, req, params...)
+	rows, err := req.RunQuery(ctx)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
-		return nil, &Error{Query: req, Err: err}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -132,51 +100,20 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 	}
 
 	// SELECT QUERY
-	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []any
+	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			switch rv := v.(type) {
-			case []string:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			case []any:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			default:
-				whQ = append(whQ, QuoteName(k)+"=?")
-				params = append(params, v)
-			}
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
+		req = req.Where(where)
 	}
-	req += " LIMIT 1"
+	req = req.Limit(1)
 	if opt.Lock {
-		req += " FOR UPDATE"
+		req.ForUpdate = true
 	}
 
 	// run query
-	rows, err := doQueryContext(ctx, req, params...)
+	rows, err := req.RunQuery(ctx)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
-		return &Error{Query: req, Err: err}
+		return err
 	}
 	defer rows.Close()
 
@@ -193,70 +130,32 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
-	req := "SELECT " + t.fldStr + " FROM " + QuoteName(t.table)
-	var params []any
+	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			switch rv := v.(type) {
-			case []string:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			case []any:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			default:
-				whQ = append(whQ, QuoteName(k)+"=?")
-				params = append(params, v)
-			}
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
+		req = req.Where(where)
 	}
 
 	if len(opt.Sort) > 0 {
-		// add sort (TODO)
-		req += "ORDER BY "
-		for n, o := range opt.Sort {
-			if n > 0 {
-				req += ", "
-			}
-			req += o.sortEscapeValue()
-		}
+		req = req.OrderBy(opt.Sort...)
 	}
 
 	if opt.LimitCount > 0 {
 		if opt.LimitStart > 0 {
-			req += fmt.Sprintf(" LIMIT %d, %d", opt.LimitStart, opt.LimitCount)
+			req = req.Limit(opt.LimitStart, opt.LimitCount)
 		} else {
-			req += fmt.Sprintf(" LIMIT %d", opt.LimitCount)
+			req = req.Limit(opt.LimitCount)
 		}
 	}
 
 	if opt.Lock {
-		req += " FOR UPDATE"
+		req.ForUpdate = true
 	}
 
 	// run query
-	rows, err := doQueryContext(ctx, req, params...)
+	rows, err := req.RunQuery(ctx)
 	if err != nil {
 		log.Printf("[sql] error: %s", err)
-		return nil, &Error{Query: req, Err: err}
+		return nil, err
 	}
 	defer rows.Close()
 

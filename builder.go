@@ -1,6 +1,8 @@
 package psql
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,7 +35,7 @@ type QueryBuilder struct {
 	WhereData   WhereAND
 	GroupBy     []any
 	OrderByData []SortValueable
-	Limit       []int
+	LimitData   []int
 	renderData  []any // values?
 
 	// flags
@@ -125,6 +127,19 @@ func (q *QueryBuilder) Table(table any) *QueryBuilder {
 	return q
 }
 
+func (q *QueryBuilder) Limit(v ...int) *QueryBuilder {
+	switch len(v) {
+	case 0:
+		q.LimitData = nil
+		return q
+	case 1, 2:
+		q.LimitData = v
+		return q
+	default:
+		panic("invalid arguments for limit")
+	}
+}
+
 func (q *QueryBuilder) Set(fields ...any) *QueryBuilder {
 	q.FieldsSet = append(q.FieldsSet, fields...)
 	return q
@@ -158,6 +173,28 @@ func (q *QueryBuilder) RenderArgs() (string, []any, error) {
 		return "", nil, err
 	}
 	return strings.Join(ctx.req, " "), ctx.args, nil
+}
+
+func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
+	query, args, err := q.RenderArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := doQueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, &Error{query, err}
+	}
+	return res, nil
+}
+
+func (q *QueryBuilder) Prepare(ctx context.Context) (*sql.Stmt, error) {
+	query, _, err := q.RenderArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	return doPrepareContext(ctx, query)
 }
 
 func (q *QueryBuilder) render(ctx *renderContext) error {
@@ -257,11 +294,11 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 			return err
 		}
 	}
-	switch len(q.Limit) {
+	switch len(q.LimitData) {
 	case 1:
-		ctx.append("LIMIT", strconv.Itoa(q.Limit[0]))
+		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
 	case 2:
-		ctx.append("LIMIT", strconv.Itoa(q.Limit[0])+",", strconv.Itoa(q.Limit[1]))
+		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0])+",", strconv.Itoa(q.LimitData[1]))
 	}
 	if q.ForUpdate {
 		ctx.append("FOR UPDATE")

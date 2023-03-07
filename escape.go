@@ -124,6 +124,25 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
 		return b.String()
+	case []any:
+		// (in)
+		if len(v) == 0 {
+			// "column" IN (nothing) is always false
+			return "FALSE"
+		}
+		if not {
+			b.WriteString(" NOT IN(")
+		} else {
+			b.WriteString(" IN(")
+		}
+		for n, sub := range v {
+			if n != 0 {
+				b.WriteByte(',')
+			}
+			b.WriteString(escapeCtx(ctx, sub))
+		}
+		b.WriteByte(')')
+		return b.String()
 	default:
 		if not {
 			b.WriteString("!=")
