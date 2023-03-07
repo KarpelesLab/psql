@@ -17,7 +17,7 @@ func (w WhereAND) EscapeValue() string {
 			b.WriteString(" AND ")
 		}
 		b.WriteByte('(')
-		b.WriteString(Escape(v))
+		b.WriteString(EscapeWhere(v, "AND"))
 		b.WriteByte(')')
 	}
 
@@ -36,7 +36,7 @@ func (w WhereOR) EscapeValue() string {
 			b.WriteString(" OR ")
 		}
 		b.WriteByte('(')
-		b.WriteString(Escape(v))
+		b.WriteString(EscapeWhere(v, "OR"))
 		b.WriteByte(')')
 	}
 

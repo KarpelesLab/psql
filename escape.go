@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
@@ -82,5 +83,93 @@ func Escape(val any) string {
 		default:
 			return fmt.Sprintf("%v", val)
 		}
+	}
+}
+
+func EscapeWhereSub(key string, val any) string {
+	b := &bytes.Buffer{}
+	b.WriteString(fieldName(key).EscapeValue())
+	not := false
+	if n, ok := val.(*Not); ok {
+		not = true
+		val = n.V
+	}
+
+	switch v := val.(type) {
+	case *Like:
+		// ignore Field
+		if not {
+			b.WriteString(" NOT")
+		}
+		b.WriteString(" LIKE ")
+		b.WriteString(Escape(v.Like))
+		b.WriteString(" ESCAPE '\\'")
+		return b.String()
+	default:
+		if not {
+			b.WriteString("!=")
+		} else {
+			b.WriteByte('=')
+		}
+		b.WriteString(Escape(val))
+		return b.String()
+	}
+}
+
+func EscapeWhere(val any, glue string) string {
+	switch v := val.(type) {
+	case map[string]any:
+		// key = value
+		b := &bytes.Buffer{}
+		b.WriteByte('(')
+		first := true
+		for key, sub := range v {
+			if first {
+				first = false
+			} else {
+				b.WriteByte(' ')
+				b.WriteString(glue)
+				b.WriteByte(' ')
+			}
+			b.WriteString(EscapeWhereSub(key, sub))
+		}
+		b.WriteByte(')')
+		return b.String()
+	case []string:
+		// V, V, V...
+		b := &bytes.Buffer{}
+		b.WriteByte('(')
+		first := true
+		for _, sub := range v {
+			if first {
+				first = false
+			} else {
+				b.WriteByte(' ')
+				b.WriteString(glue)
+				b.WriteByte(' ')
+			}
+			b.WriteString(EscapeWhere(sub, glue))
+		}
+		b.WriteByte(')')
+		return b.String()
+	case []any:
+		// V, V, V...
+		b := &bytes.Buffer{}
+		b.WriteByte('(')
+		first := true
+		for _, sub := range v {
+			if first {
+				first = false
+			} else {
+				b.WriteByte(' ')
+				b.WriteString(glue)
+				b.WriteByte(' ')
+			}
+			b.WriteString(EscapeWhere(sub, glue))
+		}
+		b.WriteByte(')')
+		return b.String()
+	default:
+		return Escape(val)
 	}
 }
