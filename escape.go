@@ -157,6 +157,10 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 func escapeWhere(ctx *renderContext, val any, glue string) string {
 	switch v := val.(type) {
 	case map[string]any:
+		if len(v) == 0 {
+			// empty where → match all
+			return "1"
+		}
 		// key = value
 		b := &bytes.Buffer{}
 		first := true
@@ -170,6 +174,10 @@ func escapeWhere(ctx *renderContext, val any, glue string) string {
 		}
 		return b.String()
 	case []string:
+		if len(v) == 0 {
+			// empty where → match all
+			return "1"
+		}
 		// V, V, V...
 		b := &bytes.Buffer{}
 		first := true
@@ -183,6 +191,10 @@ func escapeWhere(ctx *renderContext, val any, glue string) string {
 		}
 		return b.String()
 	case []any:
+		if len(v) == 0 {
+			// empty where → match all
+			return "1"
+		}
 		// V, V, V...
 		b := &bytes.Buffer{}
 		first := true

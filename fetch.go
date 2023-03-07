@@ -63,7 +63,7 @@ func Fetch[T any](ctx context.Context, where map[string]any, opts ...*FetchOptio
 	return Table[T]().Fetch(ctx, where, opts...)
 }
 
-func (t *TableMeta[T]) Get(ctx context.Context, where map[string]any, opts ...*FetchOptions) (*T, error) {
+func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions) (*T, error) {
 	// simplified get
 	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
@@ -91,7 +91,7 @@ func (t *TableMeta[T]) Get(ctx context.Context, where map[string]any, opts ...*F
 	return t.spawn(rows)
 }
 
-func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string]any, opts ...*FetchOptions) error {
+func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts ...*FetchOptions) error {
 	opt := resolveFetchOpts(opts)
 
 	// grab fields from target
@@ -126,7 +126,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where map[string
 	return err
 }
 
-func (t *TableMeta[T]) Fetch(ctx context.Context, where map[string]any, opts ...*FetchOptions) ([]*T, error) {
+func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptions) ([]*T, error) {
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
