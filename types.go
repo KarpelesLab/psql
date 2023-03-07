@@ -59,3 +59,14 @@ func (s *Set) EscapeValue() string {
 func (s *Set) sortEscapeValue() string {
 	return s.EscapeValue()
 }
+
+type Not struct {
+	V any
+}
+
+func (n *Not) EscapeValue() string {
+	res := "NOT ("
+	res += Escape(n.V)
+	res += ")"
+	return res
+}

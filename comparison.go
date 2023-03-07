@@ -11,6 +11,22 @@ func Equal(a, b any) EscapeValueable {
 	return &Comparison{a, b, "="}
 }
 
+func Gt(a, b any) EscapeValueable {
+	return &Comparison{a, b, ">"}
+}
+
+func Gte(a, b any) EscapeValueable {
+	return &Comparison{a, b, ">="}
+}
+
+func Lt(a, b any) EscapeValueable {
+	return &Comparison{a, b, "<"}
+}
+
+func Lte(a, b any) EscapeValueable {
+	return &Comparison{a, b, "<="}
+}
+
 func (c *Comparison) EscapeValue() string {
 	// A Op B
 	b := &strings.Builder{}
