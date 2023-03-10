@@ -73,11 +73,30 @@ func TestSQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to fetch 43: %s", err)
 	}
+	if v3.Key != 43 {
+		t.Errorf("Fetch 43: bad id")
+	}
 	if v3.Name != "Second insert" {
 		t.Errorf("Fetch 43: bad name")
 	}
 	if v3.Status != "valid" {
 		t.Errorf("Fetch 43: bad status")
+	}
+	// fetch 43 by name (like)
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Name": &psql.Like{Like: "Second%"}})
+	if err != nil {
+		t.Fatalf("failed to fetch 43: %s", err)
+	}
+	if v3.Key != 43 {
+		t.Errorf("Fetch 43: bad id")
+	}
+	// fetch 43 by comparison
+	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": psql.Gt(nil, 42)})
+	if err != nil {
+		t.Fatalf("failed to fetch 43: %s", err)
+	}
+	if v3.Key != 43 {
+		t.Errorf("Fetch 43: bad id")
 	}
 
 	// Try to fetch 44 → not found error

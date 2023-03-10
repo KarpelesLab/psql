@@ -124,6 +124,11 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
 		return b.String()
+	case *Comparison:
+		// ignore Field (A) and only use B + Op
+		b.WriteString(" " + v.Op + " ")
+		b.WriteString(escapeCtx(ctx, v.B))
+		return b.String()
 	case []any:
 		// (in)
 		if len(v) == 0 {
