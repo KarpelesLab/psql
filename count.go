@@ -2,9 +2,7 @@ package psql
 
 import (
 	"context"
-	"log"
 	"os"
-	"strings"
 )
 
 func Count[T any](ctx context.Context, where map[string]any) (int, error) {
@@ -13,47 +11,15 @@ func Count[T any](ctx context.Context, where map[string]any) (int, error) {
 
 func (t *TableMeta[T]) Count(ctx context.Context, where map[string]any) (int, error) {
 	// simplified get
-	req := "SELECT COUNT(1) FROM " + QuoteName(t.table)
-	var params []any
+	req := B().Select(Raw("COUNT(1)")).From(t.table)
 	if where != nil {
-		var whQ []string
-		for k, v := range where {
-			switch rv := v.(type) {
-			case []string:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			case []any:
-				// IN (...)
-				repQ := make([]string, len(rv))
-				for n := range repQ {
-					repQ[n] = "?"
-				}
-				whQ = append(whQ, QuoteName(k)+" IN ("+strings.Join(repQ, ",")+")")
-				for _, sv := range rv {
-					params = append(params, sv)
-				}
-			default:
-				whQ = append(whQ, QuoteName(k)+"=?")
-				params = append(params, v)
-			}
-		}
-		if len(whQ) > 0 {
-			req += " WHERE " + strings.Join(whQ, " AND ")
-		}
+		req = req.Where(where)
 	}
 
 	// run query
-	rows, err := doQueryContext(ctx, req, params...)
+	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
-		return 0, &Error{Query: req, Err: err}
+		return 0, err
 	}
 	defer rows.Close()
 
