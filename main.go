@@ -30,7 +30,7 @@ func InitCfg(cfg *mysql.Config) error {
 	// use db to check
 	db, err = sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		return fmt.Errorf("Connection failed: %w", err)
+		return fmt.Errorf("connection failed: %w", err)
 	}
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(128)

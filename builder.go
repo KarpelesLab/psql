@@ -78,7 +78,7 @@ func (q *QueryBuilder) errorf(msg string, arg ...any) {
 
 func (q *QueryBuilder) AlsoSelect(fields ...any) *QueryBuilder {
 	if q.Query != "SELECT" {
-		q.err = errors.New("Invalid QueryBuilder operation")
+		q.err = errors.New("invalid QueryBuilder operation")
 	}
 	q.Fields = append(q.Fields, fields...)
 	return q
