@@ -79,6 +79,7 @@ func ErrorNumber(err error) uint16 {
 }
 
 var (
+	ErrNotReady           = errors.New("database is not ready (no connection is available)")
 	ErrNotNillable        = errors.New("field is nil but cannot be nil")
 	ErrTxAlreadyProcessed = errors.New("transaction has already been committed or rollbacked")
 )
