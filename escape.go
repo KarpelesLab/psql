@@ -129,6 +129,13 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(" " + v.Op + " ")
 		b.WriteString(escapeCtx(ctx, v.B))
 		return b.String()
+	case *betweenComp:
+		// ignore Field (a) and only use start + end
+		b.WriteString(" BETWEEN ")
+		b.WriteString(escapeCtx(ctx, v.start))
+		b.WriteString(" AND ")
+		b.WriteString(escapeCtx(ctx, v.end))
+		return b.String()
 	case []any:
 		// (in)
 		if len(v) == 0 {
