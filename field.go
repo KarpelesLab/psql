@@ -94,28 +94,29 @@ func (f *structField) sqlType() string {
 }
 
 /*
-column_definition: {
-    data_type [NOT NULL | NULL] [DEFAULT {literal | (expr)} ]
-      [VISIBLE | INVISIBLE]
-      [AUTO_INCREMENT] [UNIQUE [KEY]] [[PRIMARY] KEY]
-      [COMMENT 'string']
-      [COLLATE collation_name]
-      [COLUMN_FORMAT {FIXED | DYNAMIC | DEFAULT}]
-      [ENGINE_ATTRIBUTE [=] 'string']
-      [SECONDARY_ENGINE_ATTRIBUTE [=] 'string']
-      [STORAGE {DISK | MEMORY}]
-      [reference_definition]
-      [check_constraint_definition]
-  | data_type
-      [COLLATE collation_name]
-      [GENERATED ALWAYS] AS (expr)
-      [VIRTUAL | STORED] [NOT NULL | NULL]
-      [VISIBLE | INVISIBLE]
-      [UNIQUE [KEY]] [[PRIMARY] KEY]
-      [COMMENT 'string']
-      [reference_definition]
-      [check_constraint_definition]
-}*/
+	column_definition: {
+	    data_type [NOT NULL | NULL] [DEFAULT {literal | (expr)} ]
+	      [VISIBLE | INVISIBLE]
+	      [AUTO_INCREMENT] [UNIQUE [KEY]] [[PRIMARY] KEY]
+	      [COMMENT 'string']
+	      [COLLATE collation_name]
+	      [COLUMN_FORMAT {FIXED | DYNAMIC | DEFAULT}]
+	      [ENGINE_ATTRIBUTE [=] 'string']
+	      [SECONDARY_ENGINE_ATTRIBUTE [=] 'string']
+	      [STORAGE {DISK | MEMORY}]
+	      [reference_definition]
+	      [check_constraint_definition]
+	  | data_type
+	      [COLLATE collation_name]
+	      [GENERATED ALWAYS] AS (expr)
+	      [VIRTUAL | STORED] [NOT NULL | NULL]
+	      [VISIBLE | INVISIBLE]
+	      [UNIQUE [KEY]] [[PRIMARY] KEY]
+	      [COMMENT 'string']
+	      [reference_definition]
+	      [check_constraint_definition]
+	}
+*/
 func (f *structField) defString() string {
 	mytyp := f.sqlType()
 	if mytyp == "" {
