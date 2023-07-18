@@ -120,9 +120,10 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 
 	if val == nil {
 		if not {
-			b.WriteString(" NOT")
+			b.WriteString(" IS NOT NULL")
+		} else {
+			b.WriteString(" IS NULL")
 		}
-		b.WriteString(" NULL")
 		return b.String()
 	}
 
