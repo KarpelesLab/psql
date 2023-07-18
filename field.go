@@ -170,6 +170,19 @@ func (f *structField) matches(typ, null string, col, dflt *string) (bool, error)
 		return false, nil
 	}
 
+	// check null
+	if mynull, ok := f.attrs["null"]; ok {
+		switch mynull {
+		case "0", "false":
+			if null != "" && null != "NO" {
+				return false, nil
+			}
+		case "1", "true":
+			if null != "YES" {
+				return false, nil
+			}
+		}
+	}
 	// check default
 	if mydef, ok := f.attrs["default"]; ok && dflt != nil && mydef != *dflt {
 		return false, nil

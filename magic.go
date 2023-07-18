@@ -1,5 +1,7 @@
 package psql
 
+import "fmt"
+
 // quickhand types that can be imported easily, for example via `sql:",import=UUID"`
 var magicTypes = map[string]string{
 	"UUID":     "type=CHAR,size=36,default=00000000-0000-0000-0000-000000000000,collation=latin1_general_ci,validator=uuid",
@@ -36,4 +38,11 @@ var magicTypes = map[string]string{
 	"bool":            "type=TINYINT,size=1,null=0",
 	"*bool":           "type=TINYINT,size=1,null=1",
 	"Stamp+time.Time": "import=TS", // for time.Time fields named "Stamp"
+}
+
+func DefineMagicType(typ string, definition string) {
+	if _, found := magicTypes[typ]; found {
+		panic(fmt.Sprintf("multiple definitions of type %s", typ))
+	}
+	magicTypes[typ] = definition
 }

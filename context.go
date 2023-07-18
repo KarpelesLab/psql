@@ -9,6 +9,7 @@ type ctxData int
 
 const (
 	ctxDataObj ctxData = iota
+	ctxValueObjFetch
 )
 
 type ctxValueObj struct {
@@ -19,6 +20,9 @@ type ctxValueObj struct {
 func (c *ctxValueObj) Value(v any) any {
 	if v == ctxDataObj {
 		return c.obj
+	}
+	if v == ctxValueObjFetch {
+		return c
 	}
 	return c.Context.Value(v)
 }
@@ -70,6 +74,28 @@ func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 		return newTxCtrl(o.BeginTx(ctx, opts))
 	default:
 		return newTxCtrl(db.BeginTx(ctx, opts))
+	}
+}
+
+// EscapeTx allows obtaining the context underlying a current transaction, this can be useful
+// if a query needs to be run outside of a transaction (for example to log something, etc)
+func EscapeTx(ctx context.Context) (context.Context, bool) {
+	for {
+		obj := ctx.Value(ctxValueObjFetch)
+		if obj == nil {
+			// no parent object, just return the same ctx
+			return ctx, false
+		}
+		objV := obj.(ctxValueObj)
+
+		switch objV.obj.(type) {
+		case *sql.Tx:
+			// we reached the point we wanted
+			return objV.Context, true
+		}
+
+		// we need to go deeper
+		ctx = objV.Context
 	}
 }
 

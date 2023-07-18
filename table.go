@@ -31,6 +31,10 @@ var (
 )
 
 func Table[T any]() *TableMeta[T] {
+	if db == nil {
+		return nil
+	}
+
 	typ := reflect.TypeOf((*T)(nil)).Elem()
 
 	if typ.Kind() != reflect.Struct {
@@ -167,6 +171,9 @@ func Table[T any]() *TableMeta[T] {
 }
 
 func (t *TableMeta[T]) Name() string {
+	if t == nil {
+		return ""
+	}
 	return t.table
 }
 

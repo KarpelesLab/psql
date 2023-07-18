@@ -64,6 +64,9 @@ func Fetch[T any](ctx context.Context, where map[string]any, opts ...*FetchOptio
 }
 
 func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions) (*T, error) {
+	if t == nil {
+		return nil, ErrNotReady
+	}
 	// simplified get
 	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
@@ -92,6 +95,9 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 }
 
 func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts ...*FetchOptions) error {
+	if t == nil {
+		return ErrNotReady
+	}
 	opt := resolveFetchOpts(opts)
 
 	// grab fields from target
@@ -127,6 +133,9 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 }
 
 func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptions) ([]*T, error) {
+	if t == nil {
+		return nil, ErrNotReady
+	}
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
