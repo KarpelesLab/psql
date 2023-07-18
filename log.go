@@ -16,7 +16,7 @@ var logOutput Logger
 //
 // Or a better option:
 //
-// psql.SetLogger(log.New(os.Stderr, "psql:", log.LstdFlags)
+// psql.SetLogger(log.New(os.Stderr, "psql:", log.LstdFlags))
 func SetLogger(l Logger) {
 	logOutput = l
 }
