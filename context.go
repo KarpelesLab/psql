@@ -102,6 +102,7 @@ func EscapeTx(ctx context.Context) (context.Context, bool) {
 func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
+		debugLog(ctx, "Exec on DB: %s %v", query, args)
 		return db.ExecContext(ctx, query, args...)
 	}
 
@@ -133,6 +134,7 @@ func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, 
 func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
+		debugLog(ctx, "Query on DB: %s %v", query, args)
 		return db.QueryContext(ctx, query, args...)
 	}
 
@@ -164,6 +166,7 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
+		debugLog(ctx, "Prepare on DB: %s", query)
 		return db.PrepareContext(ctx, query)
 	}
 

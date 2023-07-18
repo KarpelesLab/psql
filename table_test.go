@@ -2,6 +2,8 @@ package psql_test
 
 import (
 	"context"
+	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -25,6 +27,8 @@ type TestTable1b struct {
 }
 
 func TestSQL(t *testing.T) {
+	psql.SetLogger(log.New(os.Stderr, "psql: ", log.LstdFlags|log.Lmsgprefix))
+
 	// attempt to connect
 	err := psql.Init("/test")
 	if err != nil {
