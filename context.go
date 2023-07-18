@@ -107,19 +107,25 @@ func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, 
 
 	switch o := obj.(type) {
 	case *sql.Tx:
+		debugLog(ctx, "Exec on tx: %s %v", query, args)
 		return o.ExecContext(ctx, query, args...)
 	case *TxProxy:
+		debugLog(ctx, "Exec on tx proxy: %s %v", query, args)
 		return o.ExecContext(ctx, query, args...)
 	case *sql.Conn:
+		debugLog(ctx, "Exec on conn: %s %v", query, args)
 		return o.ExecContext(ctx, query, args...)
 	case *sql.DB:
+		debugLog(ctx, "Exec on DB: %s %v", query, args)
 		return o.ExecContext(ctx, query, args...)
 	case interface {
 		ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	}:
+		debugLog(ctx, "Exec on %T: %s %v", o, query, args)
 		return o.ExecContext(ctx, query, args...)
 	default:
 		// unknown object, fallback to standard
+		debugLog(ctx, "Exec on DB because %T is unknown: %s %v", o, query, args)
 		return db.ExecContext(ctx, query, args...)
 	}
 }
@@ -132,18 +138,24 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 
 	switch o := obj.(type) {
 	case *sql.Tx:
+		debugLog(ctx, "Query on tx: %s %v", query, args)
 		return o.QueryContext(ctx, query, args...)
 	case *TxProxy:
+		debugLog(ctx, "Query on tx proxy: %s %v", query, args)
 		return o.QueryContext(ctx, query, args...)
 	case *sql.Conn:
+		debugLog(ctx, "Query on conn: %s %v", query, args)
 		return o.QueryContext(ctx, query, args...)
 	case *sql.DB:
+		debugLog(ctx, "Query on db: %s %v", query, args)
 		return o.QueryContext(ctx, query, args...)
 	case interface {
 		QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	}:
+		debugLog(ctx, "Query on %T: %s %v", o, query, args)
 		return o.QueryContext(ctx, query, args...)
 	default:
+		debugLog(ctx, "Query db because %T is unknown: %s %v", o, query, args)
 		// unknown object, fallback to standard
 		return db.QueryContext(ctx, query, args...)
 	}
@@ -157,19 +169,25 @@ func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 
 	switch o := obj.(type) {
 	case *sql.Tx:
+		debugLog(ctx, "Prepare on tx: %s", query)
 		return o.PrepareContext(ctx, query)
 	case *TxProxy:
+		debugLog(ctx, "Prepare on tx proxy: %s", query)
 		return o.PrepareContext(ctx, query)
 	case *sql.Conn:
+		debugLog(ctx, "Prepare on conn: %s", query)
 		return o.PrepareContext(ctx, query)
 	case *sql.DB:
+		debugLog(ctx, "Prepare on DB: %s", query)
 		return o.PrepareContext(ctx, query)
 	case interface {
 		PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 	}:
+		debugLog(ctx, "Prepare on %T: %s", o, query)
 		return o.PrepareContext(ctx, query)
 	default:
 		// unknown object, fallback to standard
+		debugLog(ctx, "Prepare on DB because %T is unknown: %s", o, query)
 		return db.PrepareContext(ctx, query)
 	}
 }
