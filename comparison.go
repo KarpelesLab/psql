@@ -48,3 +48,27 @@ func (c *Comparison) escapeValueCtx(ctx *renderContext) string {
 func (c *Comparison) sortEscapeValue() string {
 	return c.EscapeValue()
 }
+
+func (c *Comparison) opStr(not bool) string {
+	if !not {
+		// as is
+		return c.Op
+	}
+	// NOT
+	switch c.Op {
+	case "=":
+		return "!="
+	case "<":
+		return ">="
+	case "<=":
+		return ">"
+	case ">":
+		return "<="
+	case ">=":
+		return "<"
+	default:
+		// ???
+		// return "" so this leads to an error
+		return ""
+	}
+}

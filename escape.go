@@ -29,6 +29,10 @@ func escapeCtx(ctx *renderContext, val any) string {
 			return ctx.appendArg(val)
 		}
 	}
+	// null check
+	if val == nil {
+		return "NULL"
+	}
 
 	switch v := val.(type) {
 	case escapeValueCtxable:
@@ -114,6 +118,14 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		val = n.V
 	}
 
+	if val == nil {
+		if not {
+			b.WriteString(" NOT")
+		}
+		b.WriteString(" NULL")
+		return b.String()
+	}
+
 	switch v := val.(type) {
 	case *Like:
 		// ignore Field
@@ -126,11 +138,14 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		return b.String()
 	case *Comparison:
 		// ignore Field (A) and only use B + Op
-		b.WriteString(" " + v.Op + " ")
+		b.WriteString(" " + v.opStr(not) + " ")
 		b.WriteString(escapeCtx(ctx, v.B))
 		return b.String()
 	case *betweenComp:
 		// ignore Field (a) and only use start + end
+		if not {
+			b.WriteString(" NOT")
+		}
 		b.WriteString(" BETWEEN ")
 		b.WriteString(escapeCtx(ctx, v.start))
 		b.WriteString(" AND ")
