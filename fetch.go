@@ -110,6 +110,10 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	if where != nil {
 		req = req.Where(where)
 	}
+	if len(opt.Sort) > 0 {
+		req = req.OrderBy(opt.Sort...)
+	}
+
 	req = req.Limit(1)
 	if opt.Lock {
 		req.ForUpdate = true
