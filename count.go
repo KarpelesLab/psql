@@ -5,11 +5,11 @@ import (
 	"os"
 )
 
-func Count[T any](ctx context.Context, where map[string]any) (int, error) {
+func Count[T any](ctx context.Context, where any) (int, error) {
 	return Table[T]().Count(ctx, where)
 }
 
-func (t *TableMeta[T]) Count(ctx context.Context, where map[string]any) (int, error) {
+func (t *TableMeta[T]) Count(ctx context.Context, where any) (int, error) {
 	if t == nil {
 		return 0, ErrNotReady
 	}

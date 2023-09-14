@@ -50,16 +50,16 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 	return res
 }
 
-func FetchOne[T any](ctx context.Context, target *T, where map[string]any, opts ...*FetchOptions) error {
+func FetchOne[T any](ctx context.Context, target *T, where any, opts ...*FetchOptions) error {
 	return Table[T]().FetchOne(ctx, target, where, opts...)
 }
 
 // Get will instanciate a new object of type T and return a pointer to it after loading from database
-func Get[T any](ctx context.Context, where map[string]any, opts ...*FetchOptions) (*T, error) {
+func Get[T any](ctx context.Context, where any, opts ...*FetchOptions) (*T, error) {
 	return Table[T]().Get(ctx, where, opts...)
 }
 
-func Fetch[T any](ctx context.Context, where map[string]any, opts ...*FetchOptions) ([]*T, error) {
+func Fetch[T any](ctx context.Context, where any, opts ...*FetchOptions) ([]*T, error) {
 	return Table[T]().Fetch(ctx, where, opts...)
 }
 

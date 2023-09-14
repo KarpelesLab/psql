@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-func FetchMapped[T any](ctx context.Context, where map[string]any, key string, opts ...*FetchOptions) (map[string]*T, error) {
+func FetchMapped[T any](ctx context.Context, where any, key string, opts ...*FetchOptions) (map[string]*T, error) {
 	return Table[T]().FetchMapped(ctx, where, key, opts...)
 }
 
