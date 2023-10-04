@@ -86,7 +86,7 @@ func EscapeTx(ctx context.Context) (context.Context, bool) {
 			// no parent object, just return the same ctx
 			return ctx, false
 		}
-		objV := obj.(ctxValueObj)
+		objV := obj.(*ctxValueObj)
 
 		switch objV.obj.(type) {
 		case *sql.Tx:
