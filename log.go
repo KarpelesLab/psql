@@ -3,6 +3,7 @@ package psql
 import (
 	"context"
 	"log"
+	"runtime"
 )
 
 // Logger is compatible with go's log.Logger
@@ -37,5 +38,19 @@ func errorLog(ctx context.Context, msg string, args ...any) {
 		d.Printf(msg, args...)
 	} else {
 		log.Printf(msg, args...)
+		log.Printf("[sql] Runtime stack:\n%s", debugStack())
+	}
+}
+
+// debugStack returns a formatted stack trace of the goroutine that calls it.
+// It calls runtime.Stack with a large enough buffer to capture the entire trace.
+func debugStack() []byte {
+	buf := make([]byte, 1024)
+	for {
+		n := runtime.Stack(buf, false)
+		if n < len(buf) {
+			return buf[:n]
+		}
+		buf = make([]byte, 2*len(buf))
 	}
 }
