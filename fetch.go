@@ -3,7 +3,6 @@ package psql
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -82,7 +81,7 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -122,7 +121,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return err
 	}
 	defer rows.Close()
@@ -167,7 +166,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return nil, err
 	}
 	defer rows.Close()

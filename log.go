@@ -1,6 +1,9 @@
 package psql
 
-import "context"
+import (
+	"context"
+	"log"
+)
 
 // Logger is compatible with go's log.Logger
 type Logger interface {
@@ -25,5 +28,14 @@ func debugLog(ctx context.Context, msg string, args ...any) {
 	if d := logOutput; d != nil {
 		// do not add prefix here as it can be configured by the log package
 		d.Printf(msg, args...)
+	}
+}
+
+// fatal error logging
+func errorLog(ctx context.Context, msg string, args ...any) {
+	if d := logOutput; d != nil {
+		d.Printf(msg, args...)
+	} else {
+		log.Printf(msg, args...)
 	}
 }

@@ -2,7 +2,6 @@ package psql
 
 import (
 	"context"
-	"log"
 	"reflect"
 	"strings"
 )
@@ -32,7 +31,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
@@ -54,7 +53,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			log.Printf("[sql] error: %s", err)
+			errorLog(ctx, "[sql] error: %s", err)
 			return &Error{Query: req, Err: err}
 		}
 	}
@@ -77,7 +76,7 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	req := "INSERT IGNORE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
@@ -99,7 +98,7 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			log.Printf("[sql] error: %s", err)
+			errorLog(ctx, "[sql] error: %s", err)
 			return &Error{Query: req, Err: err}
 		}
 	}

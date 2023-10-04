@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 )
 
 func FetchMapped[T any](ctx context.Context, where any, key string, opts ...*FetchOptions) (map[string]*T, error) {
@@ -42,7 +41,7 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -100,7 +99,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		log.Printf("[sql] error: %s", err)
+		errorLog(ctx, "[sql] error: %s", err)
 		return nil, err
 	}
 	defer rows.Close()
