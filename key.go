@@ -1,7 +1,8 @@
 package psql
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 )
@@ -58,7 +59,7 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 		case "SPATIAL":
 			k.typ = keySpatial
 		default:
-			log.Printf("[psql] Unsupported index key type %s assumed as INDEX", t)
+			slog.Warn(fmt.Sprintf("[psql] Unsupported index key type %s assumed as INDEX", t), "event", "psql:key:badkey", "psql.index", k.name)
 		}
 	} else if k.key == "PRIMARY" {
 		k.typ = keyPrimary

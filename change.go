@@ -1,7 +1,8 @@
 package psql
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"reflect"
 )
 
@@ -14,12 +15,12 @@ func (t *TableMeta[T]) HasChanged(obj *T) bool {
 	st := t.rowstate(obj)
 	if st == nil {
 		// no main key → always report changed
-		log.Printf("[psql] HasChanged but no state")
+		slog.Warn(fmt.Sprintf("[psql] HasChanged but no state"), "event", "psql:change:state_missing", "table", t.table)
 		return true
 	}
 	if !st.init {
 		// uninitialized → no state
-		log.Printf("[psql] HasChanged on non initialized value")
+		slog.Warn(fmt.Sprintf("[psql] HasChanged on non initialized value"), "event", "psql:change:state_uninit", "table", t.table)
 		return true
 	}
 

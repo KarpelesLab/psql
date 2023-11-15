@@ -3,7 +3,8 @@ package psql
 import (
 	"database/sql"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 )
@@ -44,7 +45,7 @@ func (f *structField) loadAttrs(attrs map[string]string) {
 			// found a magic type
 			f.parseAttrs(magic) // recursive allowed
 		} else {
-			log.Printf("[psql] could not find import type %s for field %s", imp, f.column)
+			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s", imp, f.column), "event", "psql:field:attr:missing_import", "psql.field", f.name)
 		}
 	} else if _, ok = attrs["type"]; ok {
 		// has a type, so can be used as is

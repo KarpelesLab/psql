@@ -3,7 +3,7 @@ package psql
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -47,7 +47,7 @@ func InitCfg(cfg *mysql.Config) error {
 		if err := res.Scan(&k, &v); err != nil {
 			panic(err)
 		}
-		log.Printf("[mysql] %s = %s", k, v)
+		slog.Debug(fmt.Sprintf("[mysql] %s = %s", k, v), "event", "psql:init:dbvar", "psql.dbvar", k)
 	}
 
 	return nil

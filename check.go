@@ -2,7 +2,7 @@ package psql
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 )
 
@@ -27,7 +27,7 @@ func (t *TableMeta[T]) checkStructure() error {
 	}
 	defer res.Close()
 
-	log.Printf("[psql] Checking structure of table %s", t.table)
+	slog.Debug(fmt.Sprintf("[psql] Checking structure of table %s", t.table), "event", "psql:check", "psql.table", t.table)
 
 	// index fields by name
 	flds := make(map[string]*structField)
@@ -49,7 +49,7 @@ func (t *TableMeta[T]) checkStructure() error {
 
 		f, ok := flds[fInfo.Field]
 		if !ok {
-			log.Printf("[psql:check] unused field %s.%s in structure", t.table, fInfo.Field)
+			slog.Warn(fmt.Sprintf("[psql:check] unused field %s.%s in structure", t.table, fInfo.Field), "event", "psql:check:unused_field", "psql.table", t.table, "psql.field", fInfo.Field)
 			// TODO check if there is a DROP or RENAME rule for this field
 			continue
 		}
@@ -94,7 +94,7 @@ func (t *TableMeta[T]) checkStructure() error {
 		}
 		k, ok := keys[kInfo.KeyName]
 		if !ok {
-			log.Printf("[psql:check] unused key %s.%s in structure", t.table, kInfo.KeyName)
+			slog.Warn(fmt.Sprintf("[psql:check] unused key %s.%s in structure", t.table, kInfo.KeyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", kInfo.KeyName)
 			// TODO check if there is a DROP or RENAME rule for this key
 			continue
 		}
@@ -130,7 +130,7 @@ func (t *TableMeta[T]) checkStructure() error {
 			}
 			s.WriteString(req)
 		}
-		log.Printf("[psql] Performing: %s", s.String())
+		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
 		_, err := db.Exec(s.String())
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
@@ -140,7 +140,7 @@ func (t *TableMeta[T]) checkStructure() error {
 }
 
 func (t *TableMeta[T]) createTable() error {
-	log.Printf("[psql] Creating table %s", t.table)
+	slog.Debug(fmt.Sprintf("[psql] Creating table %s", t.table), "event", "psql:check:create_table", "table", t.table)
 
 	// Prepare a CREATE TABLE query
 	s := &strings.Builder{}
@@ -161,7 +161,7 @@ func (t *TableMeta[T]) createTable() error {
 	// TODO add keys
 	s.WriteString(")")
 
-	log.Printf("[psql] Performing: %s", s.String())
+	slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
 	_, err := db.Exec(s.String())
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)

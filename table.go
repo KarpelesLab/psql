@@ -3,7 +3,7 @@ package psql
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
@@ -164,7 +164,7 @@ func Table[T any]() *TableMeta[T] {
 	tableMapL.Unlock()
 
 	if err := info.checkStructure(); err != nil {
-		log.Printf("psql: failed to check table %s: %s", info.table, err)
+		slog.Error(fmt.Sprintf("psql: failed to check table %s: %s", info.table, err), "event", "psql:table:check_error", "psql.table", info.table)
 	}
 
 	return info
@@ -212,7 +212,7 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 	// scan
 	err = rows.Scan(scan...)
 	if err != nil {
-		log.Printf("scan err %s", err)
+		slog.Error(fmt.Sprintf("scan err %s", err), "event", "psql:table:scan_error", "psql.table", t.table)
 		return err
 	}
 
