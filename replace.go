@@ -2,6 +2,7 @@ package psql
 
 import (
 	"context"
+	"log/slog"
 	"reflect"
 	"strings"
 )
@@ -28,7 +29,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	req := "REPLACE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:prep_fail", "psql.table", t.table)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
@@ -50,7 +51,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			errorLog(ctx, "[sql] error: %s", err)
+			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", t.table)
 			return &Error{Query: req, Err: err}
 		}
 	}

@@ -3,6 +3,7 @@ package psql
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 )
 
@@ -81,7 +82,7 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:get:run_fail", "psql.table", t.table)
 		return nil, err
 	}
 	defer rows.Close()
@@ -121,7 +122,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:fetch_one:run_fail", "psql.table", t.table)
 		return err
 	}
 	defer rows.Close()
@@ -166,7 +167,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:fetch:run_fail", "psql.table", t.table)
 		return nil, err
 	}
 	defer rows.Close()

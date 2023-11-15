@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 func FetchMapped[T any](ctx context.Context, where any, key string, opts ...*FetchOptions) (map[string]*T, error) {
@@ -41,7 +42,7 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:fetch_mapped:run_fail", "psql.table", t.table)
 		return nil, err
 	}
 	defer rows.Close()
@@ -99,7 +100,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	// run query
 	rows, err := req.RunQuery(ctx)
 	if err != nil {
-		errorLog(ctx, "[sql] error: %s", err)
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:fetch_grouped:run_fail", "psql.table", t.table)
 		return nil, err
 	}
 	defer rows.Close()
