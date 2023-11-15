@@ -2,12 +2,13 @@ package psql
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 )
 
-// Logger is compatible with go's log.Logger
+// Logger is compatible with go's slog.Logger
 type Logger interface {
-	Printf(format string, v ...any)
+	DebugContext(ctx context.Context, msg string, args ...any)
 }
 
 var logOutput Logger
@@ -27,7 +28,7 @@ func SetLogger(l Logger) {
 func debugLog(ctx context.Context, msg string, args ...any) {
 	if d := logOutput; d != nil {
 		// do not add prefix here as it can be configured by the log package
-		d.Printf(msg, args...)
+		d.DebugContext(ctx, fmt.Sprintf(msg, args...), "event", "psql:debug")
 	}
 }
 
