@@ -2,18 +2,18 @@ package psql
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
-	"os"
 )
 
 // Delete will delete values from the table matching the where parameters
-func Delete[T any](ctx context.Context, where any, opts ...*FetchOptions) error {
+func Delete[T any](ctx context.Context, where any, opts ...*FetchOptions) (sql.Result, error) {
 	return Table[T]().Delete(ctx, where, opts...)
 }
 
-func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOptions) error {
+func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOptions) (sql.Result, error) {
 	if t == nil {
-		return ErrNotReady
+		return nil, ErrNotReady
 	}
 	// simplified get
 	req := B().Delete().From(t.table)
@@ -31,16 +31,10 @@ func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOpti
 	}
 
 	// run query
-	rows, err := req.RunQuery(ctx)
+	res, err := req.ExecQuery(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:delete:run_fail", "psql.table", t.table)
-		return err
+		return nil, err
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		// no result
-		return os.ErrNotExist
-	}
-	return nil
+	return res, nil
 }

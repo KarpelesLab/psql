@@ -188,6 +188,14 @@ func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
 	return res, nil
 }
 
+func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
+	query, args, err := q.RenderArgs()
+	if err != nil {
+		return nil, err
+	}
+	return doExecContext(ctx, query, args...)
+}
+
 func (q *QueryBuilder) Prepare(ctx context.Context) (*sql.Stmt, error) {
 	query, _, err := q.RenderArgs()
 	if err != nil {
