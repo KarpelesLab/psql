@@ -190,6 +190,29 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		}
 		b.WriteByte(')')
 		return b.String()
+	case map[string]any:
+		// can be a number of things depending on the key, and can be multiple conditions that add as a AND
+		var conds []string
+		for k, s := range v {
+			switch k {
+			case "$gt":
+				conds = append(conds, fieldName(key).EscapeValue()+">"+escapeCtx(ctx, s))
+			case "$lt":
+				conds = append(conds, fieldName(key).EscapeValue()+"<"+escapeCtx(ctx, s))
+			case "$gte":
+				conds = append(conds, fieldName(key).EscapeValue()+">="+escapeCtx(ctx, s))
+			case "$lte":
+				conds = append(conds, fieldName(key).EscapeValue()+"<="+escapeCtx(ctx, s))
+			}
+		}
+
+		if len(conds) == 1 {
+			return conds[0]
+		} else if len(conds) == 0 {
+			return "FALSE"
+		} else {
+			return "(" + strings.Join(conds, " AND ") + ")"
+		}
 	default:
 		if not {
 			b.WriteString("!=")
