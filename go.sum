@@ -1,3 +1,5 @@
+github.com/KarpelesLab/pjson v0.1.9 h1:JVmm61sLRVb+5YkUDacgM1FlB9CTOsCUhEvF+OzUMf0=
+github.com/KarpelesLab/pjson v0.1.9/go.mod h1:gb4uSTld7I2kO2WvLdat1mN1brsS1hzSR+dWw1hL3iU=
 github.com/KarpelesLab/xuid v0.1.1 h1:kqMkPEj3OcjX3mWzB097tISNHdSRU90Zsse8f6UCfwc=
 github.com/KarpelesLab/xuid v0.1.1/go.mod h1:I8j3jvAduq/ek4GBrgGW8moE4YAqCA77W3aEk98ThOg=
 github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=

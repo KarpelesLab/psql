@@ -19,6 +19,7 @@ type TableMeta[T any] struct {
 	fldStr  string // string of all fields
 	state   int
 	attrs   map[string]string
+	futures sync.Map
 }
 
 type TableMetaIntf interface {
