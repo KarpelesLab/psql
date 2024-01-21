@@ -44,7 +44,7 @@ func Lazy[T any](col, val string) *Future[T] {
 	return newv
 }
 
-func (f *Future[T]) resolve(ctx context.Context) (*T, error) {
+func (f *Future[T]) Resolve(ctx context.Context) (*T, error) {
 	f.once.Do(func() {
 		if ctx == nil {
 			ctx = context.Background()
@@ -60,7 +60,7 @@ func (f *Future[T]) resolve(ctx context.Context) (*T, error) {
 }
 
 func (f *Future[T]) MarshalJSON() ([]byte, error) {
-	v, err := f.resolve(nil)
+	v, err := f.Resolve(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (f *Future[T]) MarshalJSON() ([]byte, error) {
 }
 
 func (f *Future[T]) MarshalContextJSON(ctx context.Context) ([]byte, error) {
-	v, err := f.resolve(ctx)
+	v, err := f.Resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
