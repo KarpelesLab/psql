@@ -23,6 +23,7 @@ func TestBuilder(t *testing.T) {
 		&testV{psql.B().Update("Table").Set(map[string]any{"Col": "Value", "Col2": "Value 2"}).Where(psql.Equal(psql.F("Field"), 42)), `UPDATE "Table" SET "Col"='Value',"Col2"='Value 2' WHERE ("Field"=42)`},
 		&testV{psql.B().Select("Field").From("Table").OrderBy(psql.S("Col1", "ASC"), psql.S("Col2")), `SELECT "Field" FROM "Table" ORDER BY "Col1" ASC,"Col2"`},
 		&testV{psql.B().Select(psql.Raw(`"A", "B"`)).From("Table"), `SELECT "A", "B" FROM "Table"`},
+		&testV{psql.B().Select("Field").From("Table").Where(map[string]any{"Field": psql.WhereOR{nil, psql.Lte(nil, 42)}}), `SELECT "Field" FROM "Table" WHERE (("Field" IS NULL OR "Field" <= 42))`},
 	}
 
 	for _, test := range tests {

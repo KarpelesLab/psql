@@ -152,6 +152,32 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(" AND ")
 		b.WriteString(escapeCtx(ctx, v.end))
 		return b.String()
+	case WhereOR:
+		// need to build a OR and repeat the field for each possible option
+		b = &bytes.Buffer{} // reset buffer
+		b.WriteString("(")
+		for n, subv := range v {
+			if n > 0 {
+				b.WriteString(" OR ")
+			}
+			// escape
+			b.WriteString(escapeWhereSub(ctx, key, subv))
+		}
+		b.WriteString(")")
+		return b.String()
+	case WhereAND:
+		// need to build a AND and repeat the field for each possible option
+		b = &bytes.Buffer{} // reset buffer
+		b.WriteString("(")
+		for n, subv := range v {
+			if n > 0 {
+				b.WriteString(" AND ")
+			}
+			// escape
+			b.WriteString(escapeWhereSub(ctx, key, subv))
+		}
+		b.WriteString(")")
+		return b.String()
 	case []any:
 		// (in)
 		if len(v) == 0 {
