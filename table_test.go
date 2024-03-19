@@ -21,6 +21,7 @@ type TestTable1b struct {
 	Key       uint64    `sql:",key=PRIMARY"`
 	Name      string    `sql:"Name,type=VARCHAR,size=128,null=0"`
 	Status    string    `sql:"Status,type=ENUM,null=0,values='valid,inactive,zombie,new',default=new"`
+	Flags     string    `sql:"Flags,type=SET,null=0,values='red,green,blue',default=red"`
 	Created   time.Time
 	NameKey   psql.Key `sql:",type=UNIQUE,fields=Name"`
 	StatusKey psql.Key `sql:",fields=Status"`

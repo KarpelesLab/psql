@@ -137,6 +137,18 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
 		return b.String()
+	case *FindInSet:
+		// ignore Field
+		b = &bytes.Buffer{}
+		if not {
+			b.WriteString("NOT ")
+		}
+		b.WriteString("FIND_IN_SET(")
+		b.WriteString(escapeCtx(ctx, v.Value))
+		b.WriteString(",")
+		b.WriteString(fieldName(key).EscapeValue())
+		b.WriteString(")")
+		return b.String()
 	case *Comparison:
 		// ignore Field (A) and only use B + Op
 		b.WriteString(" " + v.opStr(not) + " ")
