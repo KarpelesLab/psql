@@ -157,4 +157,10 @@ func TestSQL(t *testing.T) {
 	if v4.Name != "Updated name" {
 		t.Errorf("failed to update name for 42")
 	}
+
+	// test factory
+	newObj := psql.Factory[TestTable1b]()
+	if newObj.Status != "new" {
+		t.Errorf("expected newObj.Status=new, got %s", newObj.Status)
+	}
 }

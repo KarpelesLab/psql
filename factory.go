@@ -6,6 +6,10 @@ import (
 	"github.com/KarpelesLab/typutil"
 )
 
+func Factory[T any]() *T {
+	return Table[T]().Factory()
+}
+
 // Factory returns a new object T pre-initialized with its defaults
 func (t *TableMeta[T]) Factory() *T {
 	objptr := reflect.New(t.typ)
