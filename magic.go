@@ -37,6 +37,8 @@ var magicTypes = map[string]string{
 	"*float64":        "type=DOUBLE,null=1",
 	"bool":            "type=TINYINT,size=1,null=0",
 	"*bool":           "type=TINYINT,size=1,null=1",
+	"psql.Set":        "type=SET,null=0",
+	"*psql.Set":       "type=SET,null=1",
 	"Stamp+time.Time": "import=TS", // for time.Time fields named "Stamp"
 }
 
