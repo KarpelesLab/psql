@@ -2,6 +2,8 @@ github.com/KarpelesLab/pjson v0.1.9 h1:JVmm61sLRVb+5YkUDacgM1FlB9CTOsCUhEvF+OzUM
 github.com/KarpelesLab/pjson v0.1.9/go.mod h1:gb4uSTld7I2kO2WvLdat1mN1brsS1hzSR+dWw1hL3iU=
 github.com/KarpelesLab/typutil v0.2.7 h1:yDCjwvjPkAc5EW7q30dCsJmvQB3bTHq1cKTL7yfIApg=
 github.com/KarpelesLab/typutil v0.2.7/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
+github.com/KarpelesLab/typutil v0.2.8 h1:4lkK1hiPjJXQobFv8A49n4tSmjFAIbzAnqpuujHmI3A=
+github.com/KarpelesLab/typutil v0.2.8/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
 github.com/KarpelesLab/xuid v0.1.1 h1:kqMkPEj3OcjX3mWzB097tISNHdSRU90Zsse8f6UCfwc=
 github.com/KarpelesLab/xuid v0.1.1/go.mod h1:I8j3jvAduq/ek4GBrgGW8moE4YAqCA77W3aEk98ThOg=
 github.com/go-sql-driver/mysql v1.6.0 h1:BCTh4TKNUYmOmMUcQ3IipzF5prigylS7XXjEkfCHuOE=

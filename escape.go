@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/KarpelesLab/typutil"
 )
 
 // Escape takes any value and transforms it into a string that can be included in a MySQL query
@@ -118,7 +120,7 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		val = n.V
 	}
 
-	if val == nil {
+	if typutil.IsNil(val) {
 		if not {
 			b.WriteString(" IS NOT NULL")
 		} else {
@@ -127,8 +129,15 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		return b.String()
 	}
 
-	switch v := val.(type) {
-	case *Like:
+	switch v := typutil.Flatten(val).(type) {
+	case nil:
+		if not {
+			b.WriteString(" IS NOT NULL")
+		} else {
+			b.WriteString(" IS NULL")
+		}
+		return b.String()
+	case Like:
 		// ignore Field
 		if not {
 			b.WriteString(" NOT")
@@ -137,7 +146,7 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
 		return b.String()
-	case *FindInSet:
+	case FindInSet:
 		// ignore Field
 		b = &bytes.Buffer{}
 		if not {
@@ -149,12 +158,12 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(fieldName(key).EscapeValue())
 		b.WriteString(")")
 		return b.String()
-	case *Comparison:
+	case Comparison:
 		// ignore Field (A) and only use B + Op
 		b.WriteString(" " + v.opStr(not) + " ")
 		b.WriteString(escapeCtx(ctx, v.B))
 		return b.String()
-	case *betweenComp:
+	case betweenComp:
 		// ignore Field (a) and only use start + end
 		if not {
 			b.WriteString(" NOT")
