@@ -104,8 +104,8 @@ func (c *txController) rollback(depth int) error {
 	}
 
 	if c.depth > 0 {
-		c.depth -= 1
 		_, err := c.tx.Exec(fmt.Sprintf("ROLLBACK TO L%d", c.depth))
+		c.depth -= 1
 		return err
 	}
 
