@@ -155,28 +155,28 @@ func (q *QueryBuilder) OrderBy(field ...SortValueable) *QueryBuilder {
 	return q
 }
 
-func (q *QueryBuilder) Render() (string, error) {
+func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
 	// Generate the actual SQL query
-	ctx := &renderContext{useArgs: false}
-	err := q.render(ctx)
+	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: false}
+	err := q.render(rctx)
 	if err != nil {
 		return "", err
 	}
-	return strings.Join(ctx.req, " "), nil
+	return strings.Join(rctx.req, " "), nil
 }
 
-func (q *QueryBuilder) RenderArgs() (string, []any, error) {
+func (q *QueryBuilder) RenderArgs(ctx context.Context) (string, []any, error) {
 	// Generate the actual SQL query
-	ctx := &renderContext{useArgs: true}
-	err := q.render(ctx)
+	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: true}
+	err := q.render(rctx)
 	if err != nil {
 		return "", nil, err
 	}
-	return strings.Join(ctx.req, " "), ctx.args, nil
+	return strings.Join(rctx.req, " "), rctx.args, nil
 }
 
 func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
-	query, args, err := q.RenderArgs()
+	query, args, err := q.RenderArgs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
 }
 
 func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
-	query, args, err := q.RenderArgs()
+	query, args, err := q.RenderArgs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
 }
 
 func (q *QueryBuilder) Prepare(ctx context.Context) (*sql.Stmt, error) {
-	query, _, err := q.RenderArgs()
+	query, _, err := q.RenderArgs(ctx)
 	if err != nil {
 		return nil, err
 	}

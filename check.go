@@ -65,6 +65,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 	log.Printf("cols = %v", cols)
 
 	// TODO
+	// SET enable_experimental_alter_column_type_general = true; cockroach does not support modifying a column without that
 
 	return nil
 }

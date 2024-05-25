@@ -1,8 +1,12 @@
 package psql
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type renderContext struct {
+	e       Engine
 	req     []string
 	args    []any
 	useArgs bool
@@ -43,7 +47,12 @@ func (ctx *renderContext) appendCommaValuesSort(vals ...SortValueable) error {
 func (ctx *renderContext) appendArg(arg any) string {
 	if ctx.useArgs {
 		ctx.args = append(ctx.args, arg)
-		return "?"
+		switch ctx.e {
+		case EnginePostgreSQL:
+			return "$" + strconv.FormatUint(uint64(len(ctx.args)), 10)
+		default:
+			return "?"
+		}
 	}
 	return Escape(arg)
 }
