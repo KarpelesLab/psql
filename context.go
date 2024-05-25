@@ -127,7 +127,7 @@ func GetBackend(ctx context.Context) *Backend {
 	}
 }
 
-func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+func ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
 		debugLog(ctx, "Exec on DB: %s %v", query, args)

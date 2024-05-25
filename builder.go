@@ -193,7 +193,7 @@ func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return doExecContext(ctx, query, args...)
+	return ExecContext(ctx, query, args...)
 }
 
 func (q *QueryBuilder) Prepare(ctx context.Context) (*sql.Stmt, error) {

@@ -14,13 +14,13 @@ type Logger interface {
 var logOutput Logger
 
 // SetLogger sets a global logger for debugging psql
-// This can be called easily as follows using go's log package:
+// This can be called easily as follows using go's slog package:
 //
-// psql.SetLogger(log.Default())
+// psql.SetLogger(slog.Default())
 //
 // Or a better option:
 //
-// psql.SetLogger(log.New(os.Stderr, "psql: ", log.LstdFlags|log.Lmsgprefix))
+// psql.SetLogger(slog.Default().With("backend", "psql")) etc...
 func SetLogger(l Logger) {
 	logOutput = l
 }
