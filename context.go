@@ -109,7 +109,7 @@ func EscapeTx(ctx context.Context) (context.Context, bool) {
 func GetBackend(ctx context.Context) *Backend {
 	for {
 		if ctx == nil {
-			return nil
+			return DefaultBackend
 		}
 		obj := ctx.Value(ctxValueObjFetch)
 		if obj == nil {

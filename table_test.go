@@ -35,12 +35,16 @@ func TestSQL(t *testing.T) {
 	err := psql.Init("/test")
 	if err != nil {
 		t.Logf("Failed to connect to local MySQL: %s", err)
-		t.Skipf("Tests ignored")
-		return
+		be, err := psql.LocalTestServer()
+		if err != nil {
+			t.Skipf("failed to start local cockroach server: %s", err)
+			return
+		}
+		psql.DefaultBackend = be
 	}
 
 	// Drop table if it exists so we start from a clean state
-	err = psql.Exec(psql.Q("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1")))
+	err = psql.Q("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1")).Exec(context.Background())
 	if err != nil {
 		t.Errorf("Failed to drop table: %s", err)
 	}

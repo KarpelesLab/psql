@@ -146,3 +146,9 @@ func (k *structKey) matches(otherK *ShowIndexResult) (bool, error) {
 	// ColumnName?
 	return true, nil
 }
+
+func (k *structKey) matchesPG(otherK *pgShowIndex) (bool, error) {
+	// check if this key matches
+	// ColumnName?
+	return true, nil
+}

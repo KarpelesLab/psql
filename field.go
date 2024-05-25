@@ -75,6 +75,10 @@ func (f *structField) sqlType(e Engine) string {
 
 	switch mytyp {
 	case "enum", "set":
+		if e == EnginePostgreSQL && mytyp == "set" {
+			// convert set to jsonb on pgsql
+			return "jsonb"
+		}
 		// get "values"
 		if myvals, ok := f.attrs["values"]; ok {
 			// split with ,

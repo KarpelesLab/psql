@@ -139,3 +139,16 @@ func (q *SQLQueryT[T]) Single(ctx context.Context) (*T, error) {
 	}
 	return t.spawn(r)
 }
+
+// All will execute the query and return all the results
+func (q *SQLQueryT[T]) All(ctx context.Context) ([]*T, error) {
+	t := Table[T]()
+	t.check(ctx)
+
+	r, err := doQueryContext(ctx, q.Query, q.Args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.spawnAll(r)
+}
