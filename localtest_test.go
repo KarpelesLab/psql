@@ -13,7 +13,7 @@ func TestLocalTest(t *testing.T) {
 	// this tests if we actually run a server
 	be, err := psql.LocalTestServer()
 	if err != nil {
-		t.Errorf("unable to launch cockroach: %s", err)
+		t.Skipf("unable to launch cockroach: %s", err)
 		return
 	}
 
