@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -279,9 +280,15 @@ func escapeWhere(ctx *renderContext, val any, glue string) string {
 			return "1"
 		}
 		// key = value
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
 		b := &bytes.Buffer{}
 		first := true
-		for key, sub := range v {
+		for _, key := range keys {
+			sub := v[key]
 			if first {
 				first = false
 			} else {

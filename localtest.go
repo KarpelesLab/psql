@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type processInfo struct {
+type testServer struct {
 	cmd   *exec.Cmd // allows tracking cmd.Process if needed
 	ended bool
 }
@@ -47,11 +47,11 @@ func LocalTestServer() (*Backend, error) {
 		return nil, err
 	}
 
-	pi := &processInfo{
+	pi := &testServer{
 		cmd: cmd,
 	}
 
-	go readCockroachStdErr(stderr)
+	go pi.readStdErr(stderr)
 
 	err = cmd.Start()
 	if err != nil {
@@ -64,7 +64,7 @@ func LocalTestServer() (*Backend, error) {
 
 	// let's try to connect
 	for i := 0; i < 120; i++ {
-		err = attemptConnect(dsn)
+		err = pi.attemptConnect(dsn)
 		if err == nil {
 			// success!
 			return New(dsn)
@@ -80,7 +80,9 @@ func LocalTestServer() (*Backend, error) {
 	return nil, fmt.Errorf("failed to connect to server: %w", err)
 }
 
-func readCockroachStdErr(pipe io.ReadCloser) {
+// readStdErr can be run in a separate thread and will log any error happening
+// with cockroach that isn't an Info or a Warning
+func (pi *testServer) readStdErr(pipe io.ReadCloser) {
 	buf := bufio.NewReader(pipe)
 	for {
 		lin, err := buf.ReadString('\n')
@@ -104,12 +106,14 @@ func readCockroachStdErr(pipe io.ReadCloser) {
 	}
 }
 
-func (pi *processInfo) wait() {
+// wait will execute cmd.Wait() to ensure stderr is closed in case the process ends
+func (pi *testServer) wait() {
 	pi.cmd.Wait()
 	pi.ended = true
 }
 
-func attemptConnect(dsn string) error {
+// attemptConnect will attempt to connect to a given dsn, reporting any errors
+func (pi *testServer) attemptConnect(dsn string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
