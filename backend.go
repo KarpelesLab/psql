@@ -106,6 +106,9 @@ func (be *Backend) DB() *sql.DB {
 }
 
 func (be *Backend) Engine() Engine {
+	if be == nil {
+		return EngineUnknown
+	}
 	return be.engine
 }
 
@@ -117,10 +120,14 @@ func (be *Backend) checkedOnce(typ reflect.Type) bool {
 
 	be.checkedLk.Lock()
 	defer be.checkedLk.Unlock()
+
+	// re-check now that we have an exclusive lock
 	_, ok := be.checked[typ]
 	if ok {
 		return true
 	}
+
+	// set to true & return false
 	be.checked[typ] = true
 	return false
 }

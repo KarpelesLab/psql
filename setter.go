@@ -32,11 +32,11 @@ func findSetter(t reflect.Type) func(v reflect.Value, from sql.RawBytes) error {
 		return stringSetter
 	case reflect.Int32:
 		return int32Setter
-	case reflect.Int64:
+	case reflect.Int64, reflect.Int:
 		return int64Setter
 	case reflect.Uint32:
 		return uint32Setter
-	case reflect.Uint64:
+	case reflect.Uint64, reflect.Uint:
 		return uint64Setter
 	case reflect.Float32:
 		return float32Setter

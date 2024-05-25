@@ -176,6 +176,21 @@ func (t *TableMeta[T]) newobj() *T {
 	return reflect.New(t.typ).Interface().(*T)
 }
 
+func (t *TableMeta[T]) spawnAll(rows *sql.Rows) ([]*T, error) {
+	var res []*T
+	defer rows.Close()
+
+	for rows.Next() {
+		obj := t.newobj()
+		err := t.scanValue(rows, obj)
+		if err != nil {
+			return res, err
+		}
+		res = append(res, obj)
+	}
+	return res, nil
+}
+
 func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
 	// spawn an object based on the provided row
 	res := t.newobj()

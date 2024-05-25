@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -30,7 +31,24 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	}
 	t.check(ctx)
 	// INSERT QUERY
-	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES ("
+
+	switch GetBackend(ctx).Engine() {
+	case EnginePostgreSQL:
+		// need to add $1, $2, $3, ...
+		ln := len(t.fields)
+		for i := 0; i < ln; i++ {
+			if i > 0 {
+				req += ","
+			}
+			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
+		}
+	case EngineMySQL:
+		fallthrough
+	default:
+		req += strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",")
+	}
+	req += ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:prep_fail", "psql.table", t.table)

@@ -61,7 +61,7 @@ func (f *structField) loadAttrs(attrs map[string]string) {
 	}
 }
 
-func (f *structField) sqlType() string {
+func (f *structField) sqlType(e Engine) string {
 	if f.attrs == nil {
 		return ""
 	}
@@ -86,6 +86,12 @@ func (f *structField) sqlType() string {
 			return ""
 		}
 	default:
+		if e == EnginePostgreSQL {
+			// pgsql requires int types to have no length
+			if x, ok := numericTypes[mytyp]; ok && x {
+				return mytyp
+			}
+		}
 		if mysize, ok := f.attrs["size"]; ok {
 			return mytyp + "(" + mysize + ")"
 		}
@@ -118,8 +124,8 @@ func (f *structField) sqlType() string {
 	      [check_constraint_definition]
 	}
 */
-func (f *structField) defString() string {
-	mytyp := f.sqlType()
+func (f *structField) defString(e Engine) string {
+	mytyp := f.sqlType(e)
 	if mytyp == "" {
 		return ""
 	}
@@ -153,12 +159,12 @@ func (f *structField) defString() string {
 	return mydef
 }
 
-func (f *structField) matches(typ, null string, col, dflt *string) (bool, error) {
+func (f *structField) matches(e Engine, typ, null string, col, dflt *string) (bool, error) {
 	if f.attrs == nil {
 		return false, errors.New("no valid field defined")
 	}
 
-	myType := f.sqlType()
+	myType := f.sqlType(e)
 	if a, b := numericTypes[typ]; myType != typ && a && b {
 		// typ we got from mysql is different, but that might not be an issue
 		if typ == strings.ToLower(f.attrs["type"]) {
