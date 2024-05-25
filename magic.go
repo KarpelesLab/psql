@@ -56,3 +56,10 @@ func DefineMagicType(typ string, definition string) {
 	}
 	magicTypes[typ] = definition
 }
+
+func DefineMagicTypeEngine(e Engine, typ string, definition string) {
+	if _, found := magicEngineTypes[e][typ]; found {
+		panic(fmt.Sprintf("multiple definitions of type %s", typ))
+	}
+	magicEngineTypes[e][typ] = definition
+}
