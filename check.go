@@ -32,15 +32,13 @@ func (t *TableMeta[T]) check(ctx context.Context) {
 }
 
 func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
-	db := GetBackend(ctx).DB()
-
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
 	}
 
 	// table = &{Virtual:{st:0xc00003e500} Catalog:defaultdb Schema:public Table:Test_Table1 TableType:BASE TABLE}
-	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = $1 AND table_name = $2", "public", t.table).Single(ctx)
+	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $2", t.table).Single(ctx)
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
@@ -52,11 +50,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		return fmt.Errorf("cannot check tables of type %s", tinfo.TableType)
 	}
 
-	res, err := db.QueryContext(ctx, "SELECT * FROM information_schema.columns WHERE table_catalog = current_database() AND table_schema = 'public' AND table_name = $1", t.table)
-	if err != nil {
-		return err
-	}
-	cols, err := Table[pgSchemaColumns]().spawnAll(res)
+	cols, err := QT[pgSchemaColumns]("SELECT * FROM information_schema.columns WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", t.table).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,7 +148,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		}
 		log.Printf("alter = %s", s)
 		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		_, err := db.Exec(s.String())
+		err = Q(s.String()).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
 		}
@@ -165,8 +159,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 }
 
 func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
-	db := GetBackend(ctx).DB()
-
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
@@ -278,7 +270,7 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 			s.WriteString(req)
 		}
 		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		_, err := db.Exec(s.String())
+		err = Q(s.String()).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
 		}
@@ -309,7 +301,7 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
 	s.WriteString(")")
 
 	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	_, err := GetBackend(ctx).DB().Exec(s.String())
+	err := Q(s.String()).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}
@@ -339,7 +331,7 @@ func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
 	s.WriteString(")")
 
 	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	_, err := GetBackend(ctx).DB().Exec(s.String())
+	err := Q(s.String()).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}
