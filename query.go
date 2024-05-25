@@ -3,6 +3,7 @@ package psql
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type SQLQuery struct {
@@ -39,6 +40,28 @@ func QueryContext(ctx context.Context, q *SQLQuery, cb func(*sql.Rows) error) er
 	for r.Next() {
 		err = cb(r)
 		if err != nil {
+			if errors.Is(err, ErrBreakLoop) {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (q *SQLQuery) Each(ctx context.Context, cb func(*sql.Rows) error) error {
+	r, err := doQueryContext(ctx, q.Query, q.Args...)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for r.Next() {
+		err := cb(r)
+		if err != nil {
+			if errors.Is(err, ErrBreakLoop) {
+				return nil
+			}
 			return err
 		}
 	}

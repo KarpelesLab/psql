@@ -83,4 +83,5 @@ var (
 	ErrNotNillable        = errors.New("field is nil but cannot be nil")
 	ErrTxAlreadyProcessed = errors.New("transaction has already been committed or rollbacked")
 	ErrDeleteBadAssert    = errors.New("delete operation failed assertion")
+	ErrBreakLoop          = errors.New("exiting loop (not an actual error, used to break out of loop callbacks)")
 )
