@@ -141,7 +141,7 @@ func (k *structKey) isUnique() bool {
 	}
 }
 
-func (k *structKey) matches(otherK *ShowIndexResult) (bool, error) {
+func (k *structKey) matches(otherK *mysqlShowIndexResult) (bool, error) {
 	// check if this key matches
 	// ColumnName?
 	return true, nil

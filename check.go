@@ -177,7 +177,7 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 	// SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_NAME` = '.$this->quote($table_name).' AND `CONSTRAINT_TYPE` = \'FOREIGN KEY\'
 
 	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
-	res, err := db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
+	fList, err := QT[mysqlShowFieldsResult]("SHOW FULL FIELDS FROM " + QuoteName(t.table)).All(ctx)
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
@@ -185,7 +185,6 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		}
 		return err
 	}
-	defer res.Close()
 
 	slog.Debug(fmt.Sprintf("[psql] Checking structure of table %s", t.table), "event", "psql:check", "psql.table", t.table)
 
@@ -200,13 +199,7 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 
 	var alterData []string
 
-	var fInfo = &ShowFieldsResult{}
-	for res.Next() {
-		err = Table[ShowFieldsResult]().ScanTo(res, fInfo)
-		if err != nil {
-			return err
-		}
-
+	for _, fInfo := range fList {
 		f, ok := flds[fInfo.Field]
 		if !ok {
 			slog.Warn(fmt.Sprintf("[psql:check] unused field %s.%s in structure", t.table, fInfo.Field), "event", "psql:check:unused_field", "psql.table", t.table, "psql.field", fInfo.Field)
@@ -230,11 +223,10 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		alterData = append(alterData, "ADD "+f.defString(EngineMySQL))
 	}
 
-	res, err = db.Query("SHOW INDEX FROM " + QuoteName(t.table))
+	kList, err := QT[mysqlShowIndexResult]("SHOW INDEX FROM " + QuoteName(t.table)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("while doing SHOW INDEX: %w", err)
 	}
-	defer res.Close()
 
 	// index keys by name
 	keys := make(map[string]*structKey)
@@ -246,12 +238,7 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		keys[n] = k
 	}
 
-	var kInfo = &ShowIndexResult{}
-	for res.Next() {
-		err = Table[ShowIndexResult]().ScanTo(res, kInfo)
-		if err != nil {
-			return err
-		}
+	for _, kInfo := range kList {
 		k, ok := keys[kInfo.KeyName]
 		if !ok {
 			slog.Warn(fmt.Sprintf("[psql:check] unused key %s.%s in structure", t.table, kInfo.KeyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", kInfo.KeyName)

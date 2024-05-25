@@ -16,7 +16,7 @@ var numericTypes = map[string]bool{
 	"double precision": true,
 }
 
-type ShowFieldsResult struct {
+type mysqlShowFieldsResult struct {
 	Virtual    Name    `sql:",check=0"`
 	Field      string  `sql:",type=VARCHAR,size=256"`
 	Type       string  `sql:",type=VARCHAR,size=256"`
@@ -29,7 +29,7 @@ type ShowFieldsResult struct {
 	Comment    string  `sql:",type=VARCHAR,size=256"`
 }
 
-type ShowIndexResult struct {
+type mysqlShowIndexResult struct {
 	Virtual     Name   `sql:",check=0"`
 	Table       string `sql:",type=VARCHAR,size=256"`
 	NonUnique   bool   `sql:"Non_unique"`

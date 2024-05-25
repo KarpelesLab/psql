@@ -75,9 +75,15 @@ func (f *structField) sqlType(e Engine) string {
 
 	switch mytyp {
 	case "enum", "set":
-		if e == EnginePostgreSQL && mytyp == "set" {
-			// convert set to jsonb on pgsql
-			return "jsonb"
+		if e == EnginePostgreSQL {
+			switch mytyp {
+			case "enum":
+				// TODO FIXME stopgap
+				return "varchar(128)"
+			case "set":
+				// convert set to jsonb on pgsql
+				return "jsonb"
+			}
 		}
 		// get "values"
 		if myvals, ok := f.attrs["values"]; ok {
