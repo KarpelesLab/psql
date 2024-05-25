@@ -105,3 +105,7 @@ func (be *Backend) DB() *sql.DB {
 	}
 	return be.db
 }
+
+func (be *Backend) Engine() Engine {
+	return be.engine
+}
