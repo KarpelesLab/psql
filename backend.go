@@ -88,6 +88,10 @@ func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 		return nil, err
 	}
 	b := &Backend{db: stdlib.OpenDBFromPool(pgdb), pgdb: pgdb, engine: EnginePostgreSQL, tableMap: make(map[reflect.Type]TableMetaIntf)}
+	b.db.SetConnMaxLifetime(time.Minute * 3)
+	b.db.SetMaxOpenConns(128)
+	b.db.SetMaxIdleConns(32)
+
 	return b, nil
 }
 
