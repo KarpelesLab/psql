@@ -27,6 +27,7 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 	if t == nil {
 		return ErrNotReady
 	}
+	t.check(ctx)
 	if t.mainKey == nil {
 		return errors.New("cannot update values without a unique key")
 	}

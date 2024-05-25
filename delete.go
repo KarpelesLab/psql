@@ -16,6 +16,7 @@ func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOpti
 	if t == nil {
 		return nil, ErrNotReady
 	}
+	t.check(ctx)
 	// simplified get
 	req := B().Delete().From(t.table)
 	if where != nil {
@@ -48,6 +49,7 @@ func DeleteOne[T any](ctx context.Context, where any, opts ...*FetchOptions) err
 }
 
 func (t *TableMeta[T]) DeleteOne(ctx context.Context, where any, opts ...*FetchOptions) error {
+	t.check(ctx)
 	tx, err := BeginTx(ctx, nil)
 	if err != nil {
 		return err

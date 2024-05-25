@@ -1,13 +1,17 @@
 package psql
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
+)
+
+var (
+	tableMap  = make(map[reflect.Type]TableMetaIntf)
+	tableMapL sync.RWMutex
 )
 
 type TableMeta[T any] struct {
@@ -21,7 +25,6 @@ type TableMeta[T any] struct {
 	state   int
 	attrs   map[string]string
 	futures sync.Map
-	backend *Backend
 }
 
 type TableMetaIntf interface {
@@ -30,40 +33,26 @@ type TableMetaIntf interface {
 
 // Table returns the table object for T against DefaultBackend unless the provided
 // ctx value has a backend.
-func Table[T any](ctxs ...context.Context) *TableMeta[T] {
-	var ctx context.Context
-	if len(ctxs) > 0 {
-		ctx = ctxs[0]
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	be := GetBackend(ctx)
-	if be == nil {
-		return nil
-	}
-
+func Table[T any]() *TableMeta[T] {
 	typ := reflect.TypeOf((*T)(nil)).Elem()
 
 	if typ.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))
 	}
 
-	be.tableMapL.RLock()
-	found, ok := be.tableMap[typ]
-	be.tableMapL.RUnlock()
+	tableMapL.RLock()
+	found, ok := tableMap[typ]
+	tableMapL.RUnlock()
 	if ok {
 		return found.(*TableMeta[T])
 	}
 
 	info := &TableMeta[T]{
-		typ:     typ,
-		table:   FormatTableName(typ.Name()),
-		fldcol:  make(map[string]*structField),
-		attrs:   make(map[string]string),
-		state:   -1,
-		backend: be,
+		typ:    typ,
+		table:  FormatTableName(typ.Name()),
+		fldcol: make(map[string]*structField),
+		attrs:  make(map[string]string),
+		state:  -1,
 	}
 
 	cnt := typ.NumField()
@@ -169,13 +158,9 @@ func Table[T any](ctxs ...context.Context) *TableMeta[T] {
 
 	info.fldStr = strings.Join(names, ",")
 
-	be.tableMapL.Lock()
-	be.tableMap[typ] = info
-	be.tableMapL.Unlock()
-
-	if err := info.checkStructure(ctx); err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", info.table, err), "event", "psql:table:check_error", "psql.table", info.table)
-	}
+	tableMapL.Lock()
+	tableMap[typ] = info
+	tableMapL.Unlock()
 
 	return info
 }

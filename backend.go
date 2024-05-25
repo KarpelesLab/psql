@@ -24,12 +24,11 @@ const (
 )
 
 type Backend struct {
-	db     *sql.DB       // db backend, always set
-	pgdb   *pgxpool.Pool // pgx backend, if any
-	engine Engine
-
-	tableMap  map[reflect.Type]TableMetaIntf
-	tableMapL sync.RWMutex
+	db        *sql.DB       // db backend, always set
+	pgdb      *pgxpool.Pool // pgx backend, if any
+	engine    Engine
+	checked   map[reflect.Type]bool
+	checkedLk sync.RWMutex
 }
 
 // New returns a Backend that connects to the provided database
@@ -77,7 +76,7 @@ func NewMySQL(cfg *mysql.Config) (*Backend, error) {
 		slog.Debug(fmt.Sprintf("[mysql] %s = %s", k, v), "event", "psql:init:dbvar", "psql.dbvar", k)
 	}
 
-	b := &Backend{db: db, engine: EngineMySQL, tableMap: make(map[reflect.Type]TableMetaIntf)}
+	b := &Backend{db: db, engine: EngineMySQL, checked: make(map[reflect.Type]bool)}
 
 	return b, nil
 }
@@ -87,7 +86,7 @@ func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &Backend{db: stdlib.OpenDBFromPool(pgdb), pgdb: pgdb, engine: EnginePostgreSQL, tableMap: make(map[reflect.Type]TableMetaIntf)}
+	b := &Backend{db: stdlib.OpenDBFromPool(pgdb), pgdb: pgdb, engine: EnginePostgreSQL, checked: make(map[reflect.Type]bool)}
 	b.db.SetConnMaxLifetime(time.Minute * 3)
 	b.db.SetMaxOpenConns(128)
 	b.db.SetMaxIdleConns(32)
@@ -108,4 +107,27 @@ func (be *Backend) DB() *sql.DB {
 
 func (be *Backend) Engine() Engine {
 	return be.engine
+}
+
+// checkOnce return true if a table has been checked once, or false otherwise
+func (be *Backend) checkedOnce(typ reflect.Type) bool {
+	if be.isChecked(typ) {
+		return true
+	}
+
+	be.checkedLk.Lock()
+	defer be.checkedLk.Unlock()
+	_, ok := be.checked[typ]
+	if ok {
+		return true
+	}
+	be.checked[typ] = true
+	return false
+}
+
+func (be *Backend) isChecked(typ reflect.Type) bool {
+	be.checkedLk.RLock()
+	defer be.checkedLk.RUnlock()
+	_, ok := be.checked[typ]
+	return ok
 }

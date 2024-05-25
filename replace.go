@@ -25,6 +25,10 @@ func Replace[T any](ctx context.Context, target ...*T) error {
 }
 
 func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
+	if t == nil {
+		return ErrNotReady
+	}
+	t.check(ctx)
 	// REPLACE QUERY
 	req := "REPLACE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)

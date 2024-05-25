@@ -7,7 +7,23 @@ import (
 	"strings"
 )
 
+// check will run checkStructure if it hasn't been run yet on this connection
+func (t *TableMeta[T]) check(ctx context.Context) {
+	be := GetBackend(ctx)
+	if be.checkedOnce(t.typ) {
+		return
+	}
+
+	// perform check
+	err := t.checkStructure(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", t.table, err), "event", "psql:table:check_error", "psql.table", t.table)
+	}
+}
+
 func (t *TableMeta[T]) checkStructure(ctx context.Context) error {
+	db := GetBackend(ctx).DB()
+
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
@@ -18,7 +34,7 @@ func (t *TableMeta[T]) checkStructure(ctx context.Context) error {
 	// SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_NAME` = '.$this->quote($table_name).' AND `CONSTRAINT_TYPE` = \'FOREIGN KEY\'
 
 	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
-	res, err := t.backend.db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
+	res, err := db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
@@ -71,7 +87,7 @@ func (t *TableMeta[T]) checkStructure(ctx context.Context) error {
 		alterData = append(alterData, "ADD "+f.defString())
 	}
 
-	res, err = t.backend.db.Query("SHOW INDEX FROM " + QuoteName(t.table))
+	res, err = db.Query("SHOW INDEX FROM " + QuoteName(t.table))
 	if err != nil {
 		return fmt.Errorf("while doing SHOW INDEX: %w", err)
 	}
@@ -132,7 +148,7 @@ func (t *TableMeta[T]) checkStructure(ctx context.Context) error {
 			s.WriteString(req)
 		}
 		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		_, err := t.backend.db.Exec(s.String())
+		_, err := db.Exec(s.String())
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
 		}
@@ -163,7 +179,7 @@ func (t *TableMeta[T]) createTable(ctx context.Context) error {
 	s.WriteString(")")
 
 	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	_, err := t.backend.db.Exec(s.String())
+	_, err := GetBackend(ctx).DB().Exec(s.String())
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}

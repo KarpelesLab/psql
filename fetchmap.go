@@ -15,6 +15,7 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	if t == nil {
 		return nil, ErrNotReady
 	}
+	t.check(ctx)
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
@@ -73,6 +74,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	if t == nil {
 		return nil, ErrNotReady
 	}
+	t.check(ctx)
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY

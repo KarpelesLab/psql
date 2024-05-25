@@ -13,6 +13,7 @@ func (t *TableMeta[T]) Count(ctx context.Context, where any) (int, error) {
 	if t == nil {
 		return 0, ErrNotReady
 	}
+	t.check(ctx)
 	// simplified get
 	req := B().Select(Raw("COUNT(1)")).From(t.table)
 	if where != nil {

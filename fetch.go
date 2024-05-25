@@ -67,6 +67,7 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 	if t == nil {
 		return nil, ErrNotReady
 	}
+	t.check(ctx)
 	// simplified get
 	req := B().Select(Raw(t.fldStr)).From(t.table)
 	if where != nil {
@@ -98,6 +99,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	if t == nil {
 		return ErrNotReady
 	}
+	t.check(ctx)
 	opt := resolveFetchOpts(opts)
 
 	// grab fields from target
@@ -140,6 +142,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	if t == nil {
 		return nil, ErrNotReady
 	}
+	t.check(ctx)
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
