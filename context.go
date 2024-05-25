@@ -27,6 +27,10 @@ func (c *ctxValueObj) Value(v any) any {
 	return c.Context.Value(v)
 }
 
+func ContextBackend(ctx context.Context, be *Backend) context.Context {
+	return &ctxValueObj{ctx, be}
+}
+
 func ContextDB(ctx context.Context, db *sql.DB) context.Context {
 	return &ctxValueObj{ctx, db}
 }
@@ -58,7 +62,7 @@ func Tx(ctx context.Context, cb func(ctx context.Context) error) error {
 func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
-		return newTxCtrl(db.BeginTx(ctx, opts))
+		return newTxCtrl(GetBackend(ctx).DB().BeginTx(ctx, opts))
 	}
 
 	switch o := obj.(type) {
@@ -66,6 +70,8 @@ func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 		return newTxCtrl(o.BeginTx(ctx, opts))
 	case *sql.DB:
 		return newTxCtrl(o.BeginTx(ctx, opts))
+	case *Backend:
+		return newTxCtrl(o.db.BeginTx(ctx, opts))
 	case *TxProxy:
 		return o.BeginTx(ctx, opts)
 	case interface {
@@ -73,7 +79,7 @@ func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 	}:
 		return newTxCtrl(o.BeginTx(ctx, opts))
 	default:
-		return newTxCtrl(db.BeginTx(ctx, opts))
+		return newTxCtrl(GetBackend(ctx).DB().BeginTx(ctx, opts))
 	}
 }
 
@@ -88,8 +94,7 @@ func EscapeTx(ctx context.Context) (context.Context, bool) {
 		}
 		objV := obj.(*ctxValueObj)
 
-		switch objV.obj.(type) {
-		case *sql.Tx:
+		if _, ok := objV.obj.(*sql.Tx); ok {
 			// we reached the point we wanted
 			return objV.Context, true
 		}
@@ -99,11 +104,34 @@ func EscapeTx(ctx context.Context) (context.Context, bool) {
 	}
 }
 
+// GetBackend will attempt to find a backend in the provided context and return it, or it will
+// return DefaultBackend if no backend was found.
+func GetBackend(ctx context.Context) *Backend {
+	for {
+		if ctx == nil {
+			return nil
+		}
+		obj := ctx.Value(ctxValueObjFetch)
+		if obj == nil {
+			// no parent object
+			return DefaultBackend
+		}
+		objV := obj.(*ctxValueObj)
+
+		if be, ok := objV.obj.(*Backend); ok {
+			return be
+		}
+
+		// we need to continue
+		ctx = objV.Context
+	}
+}
+
 func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
 		debugLog(ctx, "Exec on DB: %s %v", query, args)
-		return db.ExecContext(ctx, query, args...)
+		return GetBackend(ctx).DB().ExecContext(ctx, query, args...)
 	}
 
 	switch o := obj.(type) {
@@ -119,6 +147,9 @@ func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, 
 	case *sql.DB:
 		debugLog(ctx, "Exec on DB: %s %v", query, args)
 		return o.ExecContext(ctx, query, args...)
+	case *Backend:
+		debugLog(ctx, "Exec on Backend: %s %v", query, args)
+		return o.db.ExecContext(ctx, query, args...)
 	case interface {
 		ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	}:
@@ -127,7 +158,7 @@ func doExecContext(ctx context.Context, query string, args ...any) (sql.Result, 
 	default:
 		// unknown object, fallback to standard
 		debugLog(ctx, "Exec on DB because %T is unknown: %s %v", o, query, args)
-		return db.ExecContext(ctx, query, args...)
+		return GetBackend(ctx).DB().ExecContext(ctx, query, args...)
 	}
 }
 
@@ -135,7 +166,7 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
 		debugLog(ctx, "Query on DB: %s %v", query, args)
-		return db.QueryContext(ctx, query, args...)
+		return GetBackend(ctx).DB().QueryContext(ctx, query, args...)
 	}
 
 	switch o := obj.(type) {
@@ -151,6 +182,9 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 	case *sql.DB:
 		debugLog(ctx, "Query on db: %s %v", query, args)
 		return o.QueryContext(ctx, query, args...)
+	case *Backend:
+		debugLog(ctx, "Query on Backend: %s %v", query, args)
+		return o.db.QueryContext(ctx, query, args...)
 	case interface {
 		QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	}:
@@ -159,7 +193,7 @@ func doQueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, 
 	default:
 		debugLog(ctx, "Query db because %T is unknown: %s %v", o, query, args)
 		// unknown object, fallback to standard
-		return db.QueryContext(ctx, query, args...)
+		return GetBackend(ctx).DB().QueryContext(ctx, query, args...)
 	}
 }
 
@@ -167,7 +201,7 @@ func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
 		debugLog(ctx, "Prepare on DB: %s", query)
-		return db.PrepareContext(ctx, query)
+		return GetBackend(ctx).DB().PrepareContext(ctx, query)
 	}
 
 	switch o := obj.(type) {
@@ -183,6 +217,9 @@ func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	case *sql.DB:
 		debugLog(ctx, "Prepare on DB: %s", query)
 		return o.PrepareContext(ctx, query)
+	case *Backend:
+		debugLog(ctx, "Prepare on Backend: %s", query)
+		return o.db.PrepareContext(ctx, query)
 	case interface {
 		PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 	}:
@@ -191,6 +228,6 @@ func doPrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	default:
 		// unknown object, fallback to standard
 		debugLog(ctx, "Prepare on DB because %T is unknown: %s", o, query)
-		return db.PrepareContext(ctx, query)
+		return GetBackend(ctx).DB().PrepareContext(ctx, query)
 	}
 }

@@ -15,9 +15,9 @@ func Q(q string, args ...any) *SQLQuery {
 	return &SQLQuery{q, args}
 }
 
-// Exec simply runs a query against the database
+// Exec simply runs a query against the DefaultBackend
 func Exec(q *SQLQuery) error {
-	_, err := db.Exec(q.Query, q.Args...)
+	_, err := GetBackend(nil).DB().Exec(q.Query, q.Args...)
 	return err
 }
 

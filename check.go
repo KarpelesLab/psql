@@ -1,12 +1,13 @@
 package psql
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
 )
 
-func (t *TableMeta[T]) checkStructure() error {
+func (t *TableMeta[T]) checkStructure(ctx context.Context) error {
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
@@ -17,11 +18,11 @@ func (t *TableMeta[T]) checkStructure() error {
 	// SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_NAME` = '.$this->quote($table_name).' AND `CONSTRAINT_TYPE` = \'FOREIGN KEY\'
 
 	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
-	res, err := db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
+	res, err := t.backend.db.Query("SHOW FULL FIELDS FROM " + QuoteName(t.table))
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
-			return t.createTable()
+			return t.createTable(ctx)
 		}
 		return err
 	}
@@ -70,7 +71,7 @@ func (t *TableMeta[T]) checkStructure() error {
 		alterData = append(alterData, "ADD "+f.defString())
 	}
 
-	res, err = db.Query("SHOW INDEX FROM " + QuoteName(t.table))
+	res, err = t.backend.db.Query("SHOW INDEX FROM " + QuoteName(t.table))
 	if err != nil {
 		return fmt.Errorf("while doing SHOW INDEX: %w", err)
 	}
@@ -131,7 +132,7 @@ func (t *TableMeta[T]) checkStructure() error {
 			s.WriteString(req)
 		}
 		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		_, err := db.Exec(s.String())
+		_, err := t.backend.db.Exec(s.String())
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
 		}
@@ -139,8 +140,8 @@ func (t *TableMeta[T]) checkStructure() error {
 	return nil
 }
 
-func (t *TableMeta[T]) createTable() error {
-	slog.Debug(fmt.Sprintf("[psql] Creating table %s", t.table), "event", "psql:check:create_table", "table", t.table)
+func (t *TableMeta[T]) createTable(ctx context.Context) error {
+	slog.DebugContext(ctx, fmt.Sprintf("[psql] Creating table %s", t.table), "event", "psql:check:create_table", "table", t.table)
 
 	// Prepare a CREATE TABLE query
 	s := &strings.Builder{}
@@ -161,8 +162,8 @@ func (t *TableMeta[T]) createTable() error {
 	// TODO add keys
 	s.WriteString(")")
 
-	slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	_, err := db.Exec(s.String())
+	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
+	_, err := t.backend.db.Exec(s.String())
 	if err != nil {
 		return fmt.Errorf("while creating table %s: %w", t.table, err)
 	}

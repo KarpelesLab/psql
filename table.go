@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -20,19 +21,26 @@ type TableMeta[T any] struct {
 	state   int
 	attrs   map[string]string
 	futures sync.Map
+	backend *Backend
 }
 
 type TableMetaIntf interface {
 	Name() string
 }
 
-var (
-	tableMap  = make(map[reflect.Type]TableMetaIntf)
-	tableMapL sync.RWMutex
-)
+// Table returns the table object for T against DefaultBackend unless the provided
+// ctx value has a backend.
+func Table[T any](ctxs ...context.Context) *TableMeta[T] {
+	var ctx context.Context
+	if len(ctxs) > 0 {
+		ctx = ctxs[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-func Table[T any]() *TableMeta[T] {
-	if db == nil {
+	be := GetBackend(ctx)
+	if be == nil {
 		return nil
 	}
 
@@ -42,19 +50,20 @@ func Table[T any]() *TableMeta[T] {
 		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))
 	}
 
-	tableMapL.RLock()
-	found, ok := tableMap[typ]
-	tableMapL.RUnlock()
+	be.tableMapL.RLock()
+	found, ok := be.tableMap[typ]
+	be.tableMapL.RUnlock()
 	if ok {
 		return found.(*TableMeta[T])
 	}
 
 	info := &TableMeta[T]{
-		typ:    typ,
-		table:  FormatTableName(typ.Name()),
-		fldcol: make(map[string]*structField),
-		attrs:  make(map[string]string),
-		state:  -1,
+		typ:     typ,
+		table:   FormatTableName(typ.Name()),
+		fldcol:  make(map[string]*structField),
+		attrs:   make(map[string]string),
+		state:   -1,
+		backend: be,
 	}
 
 	cnt := typ.NumField()
@@ -160,12 +169,12 @@ func Table[T any]() *TableMeta[T] {
 
 	info.fldStr = strings.Join(names, ",")
 
-	tableMapL.Lock()
-	tableMap[typ] = info
-	tableMapL.Unlock()
+	be.tableMapL.Lock()
+	be.tableMap[typ] = info
+	be.tableMapL.Unlock()
 
-	if err := info.checkStructure(); err != nil {
-		slog.Error(fmt.Sprintf("psql: failed to check table %s: %s", info.table, err), "event", "psql:table:check_error", "psql.table", info.table)
+	if err := info.checkStructure(ctx); err != nil {
+		slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", info.table, err), "event", "psql:table:check_error", "psql.table", info.table)
 	}
 
 	return info
