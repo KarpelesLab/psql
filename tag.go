@@ -7,10 +7,19 @@ package psql
 // Col string `sql:",size=foo,baz=bar"`
 // Col string `sql:",type=enum,values='a,b,c'"`
 func parseTagData(tag string) (string, map[string]string) {
+	return internalParse(tag, true)
+}
+
+func parseAttrs(tag string) map[string]string {
+	// parse with first=false so we don't take first argument as column name
+	_, res := internalParse(tag, false)
+	return res
+}
+
+func internalParse(tag string, first bool) (string, map[string]string) {
 	state := 0
 	col := ""
 	attrs := make(map[string]string)
-	first := true
 	var a, b []rune
 	var q rune
 

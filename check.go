@@ -91,6 +91,30 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		alterData = append(alterData, "ADD "+f.defString(EnginePostgreSQL))
 	}
 
+	// run alter table now, keys do not work the same as fields with pgsql
+	if len(alterData) > 0 {
+		// TODO
+		// SET enable_experimental_alter_column_type_general = true; cockroach does not support modifying a column without that
+		s := &strings.Builder{}
+		s.WriteString("ALTER TABLE ")
+		s.WriteString(QuoteName(t.table))
+		s.WriteByte(' ')
+		for n, req := range alterData {
+			if n > 0 {
+				s.WriteString(", ")
+			}
+			s.WriteString(req)
+		}
+		log.Printf("alter = %s", s)
+		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
+		err = Q(s.String()).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("while updating table %s: %w", t.table, err)
+		}
+
+		alterData = nil
+	}
+
 	// index keys by name
 	keys := make(map[string]*structKey)
 	for _, k := range t.keys {
@@ -132,28 +156,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 
 	// TODO: SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = %database AND `TABLE_SCHEMA` = %database AND `TABLE_NAME` = %table AND `CONSTRAINT_TYPE` = 'FOREIGN KEY'
 	// → check foreign keys
-
-	// TODO
-	// SET enable_experimental_alter_column_type_general = true; cockroach does not support modifying a column without that
-	if len(alterData) > 0 {
-		s := &strings.Builder{}
-		s.WriteString("ALTER TABLE ")
-		s.WriteString(QuoteName(t.table))
-		s.WriteByte(' ')
-		for n, req := range alterData {
-			if n > 0 {
-				s.WriteString(", ")
-			}
-			s.WriteString(req)
-		}
-		log.Printf("alter = %s", s)
-		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		err = Q(s.String()).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("while updating table %s: %w", t.table, err)
-		}
-	}
-	return nil
 
 	return nil
 }

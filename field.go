@@ -18,55 +18,54 @@ type structField struct {
 	setter   func(v reflect.Value, from sql.RawBytes) error
 }
 
-func (f *structField) parseAttrs(tag string) {
-	attrs := make(map[string]string)
-
-	tagData := strings.Split(tag, ",")
-	for _, v := range tagData {
-		p := strings.IndexByte(v, '=')
-		if p == -1 {
-			attrs[v] = ""
-			continue
-		}
-		attrs[v[:p]] = v[p+1:]
-	}
-
-	f.loadAttrs(attrs)
+func (f *structField) getAttrs(e Engine) map[string]string {
+	return f.resolveAttrs(e, f.attrs)
 }
 
-func (f *structField) loadAttrs(attrs map[string]string) {
+func (f *structField) resolveAttrs(e Engine, attrs map[string]string) map[string]string {
 	// check for import
 	if imp, ok := attrs["import"]; ok {
+		var res map[string]string
 		// load it from magic
-		if magic, ok := magicTypes[f.column+"+"+imp]; ok {
+		if magic, ok := magicEngineTypes[e][f.column+"+"+imp]; ok {
 			// found a magic type
-			f.parseAttrs(magic) // recursive allowed
+			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
+		} else if magic, ok := magicTypes[f.column+"+"+imp]; ok {
+			// found a magic type
+			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
+		} else if magic, ok := magicEngineTypes[e][imp]; ok {
+			// found a magic type
+			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
 		} else if magic, ok = magicTypes[imp]; ok {
 			// found a magic type
-			f.parseAttrs(magic) // recursive allowed
+			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
 		} else {
-			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s", imp, f.column), "event", "psql:field:attr:missing_import", "psql.field", f.name)
+			res = make(map[string]string)
+			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s engine %s", imp, f.column, e), "event", "psql:field:attr:missing_import", "psql.field", f.name)
 		}
+
+		// override any values from the import
+		for k, v := range attrs {
+			res[k] = v
+		}
+		return res
 	} else if _, ok = attrs["type"]; ok {
 		// has a type, so can be used as is
-		f.attrs = attrs
-		return
+		return attrs
 	}
 
-	if f.attrs != nil {
-		// we managed to load something, apply remaining attrs
-		for k, v := range attrs {
-			f.attrs[k] = v
-		}
-	}
+	// couldn't resolve this
+	// TODO raise error
+	return attrs
 }
 
 func (f *structField) sqlType(e Engine) string {
-	if f.attrs == nil {
+	attrs := f.getAttrs(e)
+	if attrs == nil {
 		return ""
 	}
 
-	mytyp, ok := f.attrs["type"]
+	mytyp, ok := attrs["type"]
 	if !ok {
 		return ""
 	}
@@ -86,7 +85,7 @@ func (f *structField) sqlType(e Engine) string {
 			}
 		}
 		// get "values"
-		if myvals, ok := f.attrs["values"]; ok {
+		if myvals, ok := attrs["values"]; ok {
 			// split with ,
 			l := strings.Split(myvals, ",")
 			// assuming nothing need to be escape for enum/set values (TODO FIXME)
@@ -102,7 +101,7 @@ func (f *structField) sqlType(e Engine) string {
 				return mytyp
 			}
 		}
-		if mysize, ok := f.attrs["size"]; ok {
+		if mysize, ok := attrs["size"]; ok {
 			return mytyp + "(" + mysize + ")"
 		}
 	}
@@ -135,6 +134,7 @@ func (f *structField) sqlType(e Engine) string {
 	}
 */
 func (f *structField) defString(e Engine) string {
+	attrs := f.getAttrs(e)
 	mytyp := f.sqlType(e)
 	if mytyp == "" {
 		return ""
@@ -144,7 +144,7 @@ func (f *structField) defString(e Engine) string {
 
 	// TODO unsigned
 
-	if null, ok := f.attrs["null"]; ok {
+	if null, ok := attrs["null"]; ok {
 		switch null {
 		case "0", "false":
 			mydef += " NOT NULL"
@@ -154,7 +154,7 @@ func (f *structField) defString(e Engine) string {
 			return "" // bad def
 		}
 	}
-	if def, ok := f.attrs["default"]; ok {
+	if def, ok := attrs["default"]; ok {
 		if def == "\\N" {
 			mydef += " DEFAULT NULL"
 		} else {
@@ -162,7 +162,7 @@ func (f *structField) defString(e Engine) string {
 		}
 	}
 
-	if mycol, ok := f.attrs["collation"]; ok {
+	if mycol, ok := attrs["collation"]; ok {
 		mydef += " COLLATE " + mycol
 	}
 
@@ -170,14 +170,15 @@ func (f *structField) defString(e Engine) string {
 }
 
 func (f *structField) matches(e Engine, typ, null string, col, dflt *string) (bool, error) {
-	if f.attrs == nil {
+	attrs := f.getAttrs(e)
+	if attrs == nil {
 		return false, errors.New("no valid field defined")
 	}
 
 	myType := f.sqlType(e)
 	if a, b := numericTypes[typ]; myType != typ && a && b {
 		// typ we got from mysql is different, but that might not be an issue
-		if typ == strings.ToLower(f.attrs["type"]) {
+		if typ == strings.ToLower(attrs["type"]) {
 			// we're good
 			myType = typ
 		}
@@ -188,7 +189,7 @@ func (f *structField) matches(e Engine, typ, null string, col, dflt *string) (bo
 	}
 
 	// check null
-	if mynull, ok := f.attrs["null"]; ok {
+	if mynull, ok := attrs["null"]; ok {
 		switch mynull {
 		case "0", "false":
 			if null != "" && null != "NO" {
@@ -201,11 +202,11 @@ func (f *structField) matches(e Engine, typ, null string, col, dflt *string) (bo
 		}
 	}
 	// check default
-	if mydef, ok := f.attrs["default"]; ok && dflt != nil && mydef != *dflt {
+	if mydef, ok := attrs["default"]; ok && dflt != nil && mydef != *dflt {
 		return false, nil
 	}
 
-	if mycol, ok := f.attrs["collation"]; ok && col != nil && mycol != *col {
+	if mycol, ok := attrs["collation"]; ok && col != nil && mycol != *col {
 		// bad collation → alter
 		return false, nil
 	}

@@ -15,14 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-type Engine int
-
-const (
-	EngineUnknown Engine = iota
-	EngineMySQL
-	EnginePostgreSQL
-)
-
 type Backend struct {
 	db        *sql.DB       // db backend, always set
 	pgdb      *pgxpool.Pool // pgx backend, if any

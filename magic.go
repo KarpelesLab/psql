@@ -2,6 +2,15 @@ package psql
 
 import "fmt"
 
+var magicEngineTypes = map[Engine]map[string]string{
+	EngineMySQL: map[string]string{
+		"DATETIME": "type=DATETIME,size=6",
+	},
+	EnginePostgreSQL: map[string]string{
+		"DATETIME": "type=DATETIME",
+	},
+}
+
 // quickhand types that can be imported easily, for example via `sql:",import=UUID"`
 var magicTypes = map[string]string{
 	"UUID":     "type=CHAR,size=36,default=00000000-0000-0000-0000-000000000000,collation=latin1_general_ci,validator=uuid",
@@ -12,7 +21,6 @@ var magicTypes = map[string]string{
 	"KEY":      "type=BIGINT,size=20,unsigned=1,null=0",
 	"TS":       "type=TIMESTAMP,size=6",
 	"DATE":     "type=DATE",
-	"DATETIME": "type=DATETIME,size=6",
 	"TEXT":     "type=TEXT",
 	"LONGTEXT": "type=LONGTEXT",
 	"JSON":     "type=LONGTEXT,format=json",

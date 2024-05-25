@@ -139,8 +139,8 @@ func Table[T any]() *TableMeta[T] {
 			name:   finfo.Name,
 			column: col,
 			setter: findSetter(finfo.Type),
+			attrs:  attrs,
 		}
-		fld.loadAttrs(attrs)
 		names = append(names, QuoteName(col))
 
 		// TODO handle other kind of nullables, such as sql.NullString etc
