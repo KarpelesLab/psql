@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,11 +21,25 @@ type testServer struct {
 	ended bool
 }
 
+var (
+	testBackend      *Backend
+	testBackendErr   error
+	testBackendStart sync.Once
+)
+
 // LocalTestServer returns a backend that can be used for local tests, especially suitable for Go unit tests
 // This requires having cockroach or apkg installed in order to run, and will start a local database
 // with in-memory storage that will shutdown at the end of the tests. The database will always start in an
 // empty state, and all data written to it will be lost once the execution completes.
 func LocalTestServer() (*Backend, error) {
+	testBackendStart.Do(func() {
+		testBackend, testBackendErr = launchLocalTestServer()
+	})
+
+	return testBackend, testBackendErr
+}
+
+func launchLocalTestServer() (*Backend, error) {
 	// first, let's locate cockroach
 	p, err := exec.LookPath("cockroach")
 	if err != nil {
