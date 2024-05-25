@@ -17,6 +17,8 @@ func Q(q string, args ...any) *SQLQuery {
 }
 
 // Exec simply runs a query against the DefaultBackend
+//
+// Deprecated: use .Exec() instead
 func Exec(q *SQLQuery) error {
 	_, err := GetBackend(nil).DB().Exec(q.Query, q.Args...)
 	return err
@@ -26,10 +28,16 @@ func Exec(q *SQLQuery) error {
 // call sql.Rows.Close()
 //
 // err = psql.Query(psql.Q("SELECT ..."), func(row *sql.Rows) error { ... })
+//
+// Deprecated: use .Each() instead
 func Query(q *SQLQuery, cb func(*sql.Rows) error) error {
 	return QueryContext(context.Background(), q, cb)
 }
 
+// QueryContext performs a query and use a callback to advance results, meaning there is no need to
+// call sql.Rows.Close()
+//
+// Deprecated: use .Each() instead
 func QueryContext(ctx context.Context, q *SQLQuery, cb func(*sql.Rows) error) error {
 	r, err := doQueryContext(ctx, q.Query, q.Args...)
 	if err != nil {
@@ -49,6 +57,10 @@ func QueryContext(ctx context.Context, q *SQLQuery, cb func(*sql.Rows) error) er
 	return nil
 }
 
+// Each will execute the query and call cb for each row, so you do not need to call
+// .Next() or .Close() on the object.
+//
+// Example use: err := psql.Q("SELECT ...").Each(ctx, func(row *sql.Rows) error { ... })
 func (q *SQLQuery) Each(ctx context.Context, cb func(*sql.Rows) error) error {
 	r, err := doQueryContext(ctx, q.Query, q.Args...)
 	if err != nil {
@@ -66,4 +78,10 @@ func (q *SQLQuery) Each(ctx context.Context, cb func(*sql.Rows) error) error {
 		}
 	}
 	return nil
+}
+
+// Exec simply executes the query and returns any error that could have happened
+func (q *SQLQuery) Exec(ctx context.Context) error {
+	_, err := GetBackend(nil).DB().Exec(q.Query, q.Args...)
+	return err
 }
