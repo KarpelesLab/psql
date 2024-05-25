@@ -93,7 +93,7 @@ func (q *SQLQuery) Each(ctx context.Context, cb func(*sql.Rows) error) error {
 
 // Exec simply executes the query and returns any error that could have happened
 func (q *SQLQuery) Exec(ctx context.Context) error {
-	_, err := GetBackend(nil).DB().Exec(q.Query, q.Args...)
+	_, err := GetBackend(ctx).DB().Exec(q.Query, q.Args...)
 	return err
 }
 

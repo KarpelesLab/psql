@@ -38,7 +38,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 	}
 
 	// table = &{Virtual:{st:0xc00003e500} Catalog:defaultdb Schema:public Table:Test_Table1 TableType:BASE TABLE}
-	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $2", t.table).Single(ctx)
+	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", t.table).Single(ctx)
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table

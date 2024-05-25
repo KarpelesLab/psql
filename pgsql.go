@@ -48,11 +48,11 @@ type pgShowIndex struct {
 	Virtual    Name   `sql:",check=0"`
 	Table      string `sql:"table_name,type=sql_identifier"`
 	Index      string `sql:"index_name,type=sql_identifier"`
-	NonUnique  string `sql:"non_unique"` // true|false
-	SeqInIndex uint   `sql:"seq_in_index"`
+	NonUnique  string `sql:"non_unique,type=character_data"` // true|false
+	SeqInIndex uint   `sql:"seq_in_index,type=cardinal_number"`
 	Column     string `sql:"column_name,type=sql_identifier"`
-	Direction  string `sql:"direction"` // ASC|DESC
-	Storing    string `sql:"storing"`   // true|false
-	Implicit   string `sql:"implicit"`
-	Visible    string `sql:"visible"`
+	Direction  string `sql:"direction,type=character_data"` // ASC|DESC
+	Storing    string `sql:"storing,type=character_data"`   // true|false
+	Implicit   string `sql:"implicit,type=character_data"`
+	Visible    string `sql:"visible,type=character_data"`
 }

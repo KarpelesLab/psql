@@ -2,8 +2,6 @@ package psql_test
 
 import (
 	"context"
-	"log/slog"
-	"os"
 	"testing"
 	"time"
 
@@ -27,38 +25,44 @@ type TestTable1b struct {
 	StatusKey psql.Key `sql:",fields=Status"`
 }
 
-func TestSQL(t *testing.T) {
-	psql.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	//os.Stderr, "psql: ", log.LstdFlags|log.Lmsgprefix))
-
-	// attempt to connect
-	err := psql.Init("/test")
+func TestTableMySQL(t *testing.T) {
+	//psql.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	backend, err := psql.New("/test")
 	if err != nil {
-		t.Logf("Failed to connect to local MySQL: %s", err)
-		be, err := psql.LocalTestServer()
-		if err != nil {
-			t.Skipf("failed to start local cockroach server: %s", err)
-			return
-		}
-		psql.DefaultBackend = be
+		t.Skipf("Failed to connect to local MySQL: %s", err)
+		return
 	}
 
+	performSQLTest(backend.Plug(context.Background()), t)
+}
+
+func TestTableCockroach(t *testing.T) {
+	backend, err := psql.LocalTestServer()
+	if err != nil {
+		t.Skipf("failed to start local cockroach server: %s", err)
+		return
+	}
+
+	performSQLTest(backend.Plug(context.Background()), t)
+}
+
+func performSQLTest(ctx context.Context, t *testing.T) {
 	// Drop table if it exists so we start from a clean state
-	err = psql.Q("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1")).Exec(context.Background())
+	err := psql.Q("DROP TABLE IF EXISTS " + psql.QuoteName("Test_Table1")).Exec(ctx)
 	if err != nil {
 		t.Errorf("Failed to drop table: %s", err)
 	}
 
 	// Insert a value. This will trigger the creation of the table
 	v := &TestTable1{Key: 42, Name: "Hello world"}
-	err = psql.Insert(context.Background(), v)
+	err = psql.Insert(ctx, v)
 	if err != nil {
 		t.Fatalf("Failed to insert: %s", err)
 	}
 
 	// Instanciate version 1b, should trigger change of Name (size=64 → size=128) and addition of 2 fields
 	v2 := &TestTable1b{Key: 43, Name: "Second insert", Status: "valid", Created: time.Now()}
-	err = psql.Insert(context.Background(), v2)
+	err = psql.Insert(ctx, v2)
 	if err != nil {
 		t.Fatalf("failed to insert 2: %s", err)
 	}
@@ -67,7 +71,7 @@ func TestSQL(t *testing.T) {
 	var v3 = &TestTable1b{}
 
 	// we don't allow passing a pointer there anymore
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": []any{42}})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Key": []any{42}})
 	if err != nil {
 		t.Fatalf("failed to fetch 42: %s", err)
 	}
@@ -79,7 +83,7 @@ func TestSQL(t *testing.T) {
 	}
 
 	// fetch 43
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 43})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Key": 43})
 	if err != nil {
 		t.Fatalf("failed to fetch 43: %s", err)
 	}
@@ -93,7 +97,7 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Fetch 43: bad status")
 	}
 	// fetch 43 by name (like)
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Name": &psql.Like{Like: "Second%"}})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Name": &psql.Like{Like: "Second%"}})
 	if err != nil {
 		t.Fatalf("failed to fetch 43: %s", err)
 	}
@@ -101,7 +105,7 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Fetch 43: bad id")
 	}
 	// fetch 43 by comparison
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": psql.Gt(nil, 42)})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Key": psql.Gt(nil, 42)})
 	if err != nil {
 		t.Fatalf("failed to fetch 43: %s", err)
 	}
@@ -110,12 +114,12 @@ func TestSQL(t *testing.T) {
 	}
 
 	// Try to fetch 44 → not found error
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 44})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Key": 44})
 	if !psql.IsNotExist(err) {
 		t.Errorf("Fetch 44: should be not found, but error was %v", err)
 	}
 
-	lst, err := psql.Fetch[TestTable1b](context.Background(), nil)
+	lst, err := psql.Fetch[TestTable1b](ctx, nil)
 	if err != nil {
 		t.Fatalf("failed to fetch all: %s", err)
 	}
@@ -124,7 +128,7 @@ func TestSQL(t *testing.T) {
 	}
 
 	// Re-fetch 42
-	err = psql.FetchOne(context.Background(), v3, map[string]any{"Key": 42})
+	err = psql.FetchOne(ctx, v3, map[string]any{"Key": 42})
 	if err != nil {
 		t.Fatalf("failed to fetch 42: %s", err)
 	}
@@ -140,7 +144,7 @@ func TestSQL(t *testing.T) {
 		t.Errorf("Update 42 does not report changes")
 	}
 
-	err = psql.Update(context.Background(), v3)
+	err = psql.Update(ctx, v3)
 	if err != nil {
 		t.Fatalf("failed to update 42: %s", err)
 	}
@@ -153,7 +157,7 @@ func TestSQL(t *testing.T) {
 	var v4 = &TestTable1b{}
 
 	// Re-fetch 42
-	err = psql.FetchOne(context.Background(), v4, map[string]any{"Key": 42})
+	err = psql.FetchOne(ctx, v4, map[string]any{"Key": 42})
 	if err != nil {
 		t.Fatalf("failed to fetch 42: %s", err)
 	}
