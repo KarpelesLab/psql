@@ -1,6 +1,7 @@
 package psql_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/KarpelesLab/psql"
@@ -29,7 +30,7 @@ func TestBuilder(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, err := test.b.Render()
+		v, err := test.b.Render(context.Background())
 		if err != nil {
 			t.Errorf("Failed to render: %s", err)
 			continue
@@ -57,7 +58,7 @@ func TestBuilderArgs(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		v, _, err := test.b.RenderArgs()
+		v, _, err := test.b.RenderArgs(context.Background())
 		if err != nil {
 			t.Errorf("Failed to render: %s", err)
 			continue
