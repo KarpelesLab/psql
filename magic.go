@@ -7,7 +7,7 @@ var magicEngineTypes = map[Engine]map[string]string{
 		"DATETIME": "type=DATETIME,size=6",
 	},
 	EnginePostgreSQL: map[string]string{
-		"DATETIME": "type=DATETIME",
+		"DATETIME": "type=TIMESTAMP,size=6,default='1970-01-01 00:00:00.000000'",
 	},
 }
 

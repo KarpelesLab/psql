@@ -2,6 +2,7 @@ package psql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -80,8 +81,8 @@ func (f *structField) sqlType(e Engine) string {
 				// TODO FIXME stopgap
 				return "varchar(128)"
 			case "set":
-				// convert set to jsonb on pgsql
-				return "jsonb"
+				// we return set but it will actually be a jsonb
+				return "set"
 			}
 		}
 		// get "values"
@@ -139,6 +140,12 @@ func (f *structField) defString(e Engine) string {
 	if mytyp == "" {
 		return ""
 	}
+	setType := false
+
+	if e == EnginePostgreSQL && mytyp == "set" {
+		mytyp = "jsonb"
+		setType = true
+	}
 
 	mydef := QuoteName(f.column) + " " + mytyp
 
@@ -155,10 +162,25 @@ func (f *structField) defString(e Engine) string {
 		}
 	}
 	if def, ok := attrs["default"]; ok {
-		if def == "\\N" {
-			mydef += " DEFAULT NULL"
-		} else {
-			mydef += " DEFAULT " + Escape(def)
+		switch e {
+		case EnginePostgreSQL:
+			// there are various things to take into account if engine is pgsql
+			if setType {
+				// need to encode default as json
+				js, _ := json.Marshal([]string{def})
+				def = string(js)
+			}
+			if def == "\\N" {
+				mydef += " DEFAULT NULL"
+			} else {
+				mydef += " DEFAULT " + Escape(def)
+			}
+		default:
+			if def == "\\N" {
+				mydef += " DEFAULT NULL"
+			} else {
+				mydef += " DEFAULT " + Escape(def)
+			}
 		}
 	}
 
