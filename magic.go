@@ -5,9 +5,11 @@ import "fmt"
 var magicEngineTypes = map[Engine]map[string]string{
 	EngineMySQL: map[string]string{
 		"DATETIME": "type=DATETIME,size=6",
+		"JSON":     "type=LONGTEXT,format=json",
 	},
 	EnginePostgreSQL: map[string]string{
 		"DATETIME": "type=TIMESTAMP,size=6,default='1970-01-01 00:00:00.000000'",
+		"JSON":     "type=JSONB,format=json",
 	},
 }
 
@@ -23,7 +25,6 @@ var magicTypes = map[string]string{
 	"DATE":     "type=DATE",
 	"TEXT":     "type=TEXT",
 	"LONGTEXT": "type=LONGTEXT",
-	"JSON":     "type=LONGTEXT,format=json",
 	"CURRENCY": "type=CHAR,size=5,default=USD,collation=latin1_general_ci",
 	"COUNTRY":  "type=CHAR,size=3,default=US,collation=latin1_general_ci",
 	"LANGUAGE": "type=CHAR,size=5,default=en-US,collation=latin1_general_ci,validator=language",
