@@ -33,7 +33,9 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	// INSERT QUERY
 	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES ("
 
-	switch GetBackend(ctx).Engine() {
+	engine := GetBackend(ctx).Engine()
+
+	switch engine {
 	case EnginePostgreSQL:
 		// need to add $1, $2, $3, ...
 		ln := len(t.fields)
@@ -68,7 +70,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 					continue
 				}
 			}
-			params[n] = export(fval.Interface())
+			params[n] = engine.export(fval.Interface(), f)
 		}
 
 		_, err := stmt.ExecContext(ctx, params...)
@@ -102,6 +104,8 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	}
 	defer stmt.Close()
 
+	engine := GetBackend(ctx).Engine()
+
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()
 
@@ -114,7 +118,7 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 					continue
 				}
 			}
-			params[n] = export(fval.Interface())
+			params[n] = engine.export(fval.Interface(), f)
 		}
 
 		_, err := stmt.ExecContext(ctx, params...)

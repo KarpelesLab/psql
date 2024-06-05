@@ -17,10 +17,16 @@ type structField struct {
 	nullable bool   // if a ptr or a kind of nullable value
 	attrs    map[string]string
 	setter   func(v reflect.Value, from sql.RawBytes) error
+	rattrs   map[Engine]map[string]string // resolved attrs
 }
 
+// getAttrs returns the fields' attrs for a given Engine, which can be cached for performance
 func (f *structField) getAttrs(e Engine) map[string]string {
-	return f.resolveAttrs(e, f.attrs)
+	if r, ok := f.rattrs[e]; ok {
+		return r
+	}
+	f.rattrs[e] = f.resolveAttrs(e, f.attrs)
+	return f.rattrs[e]
 }
 
 func (f *structField) resolveAttrs(e Engine, attrs map[string]string) map[string]string {
@@ -82,7 +88,8 @@ func (f *structField) sqlType(e Engine) string {
 				return "varchar(128)"
 			case "set":
 				// we return set but it will actually be a jsonb
-				return "set"
+				return "varchar(128)"
+				//return "set"
 			}
 		}
 		// get "values"

@@ -167,7 +167,7 @@ func performSQLTest(ctx context.Context, t *testing.T) {
 	}
 
 	// test factory
-	newObj := psql.Factory[TestTable1b]()
+	newObj := psql.Factory[TestTable1b](ctx)
 	if newObj.Status != "new" {
 		t.Errorf("expected newObj.Status=new, got %s", newObj.Status)
 	}

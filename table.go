@@ -140,6 +140,7 @@ func Table[T any]() *TableMeta[T] {
 			column: col,
 			setter: findSetter(finfo.Type),
 			attrs:  attrs,
+			rattrs: make(map[Engine]map[string]string),
 		}
 		names = append(names, QuoteName(col))
 
@@ -245,10 +246,8 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 				if !f.IsNil() {
 					f.Set(reflect.Zero(f.Type()))
 				}
-				continue
-			} else {
-				return fmt.Errorf("on field %s: %w", fld.name, ErrNotNillable)
 			}
+			continue
 		}
 		// make sure "f" is a settable value (not a ptr), allocate if needed
 		for f.Kind() == reflect.Ptr {

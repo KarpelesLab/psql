@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 )
 
 // Update is a short way to insert objects into database
@@ -23,6 +24,11 @@ func Update[T any](ctx context.Context, target ...*T) error {
 	return Table[T]().Update(ctx, target...)
 }
 
+type updatedField struct {
+	f *structField
+	v any
+}
+
 func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 	if t == nil {
 		return ErrNotReady
@@ -32,9 +38,12 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		return errors.New("cannot update values without a unique key")
 	}
 
+	engine := GetBackend(ctx).Engine()
+
 	for _, obj := range target {
 		// check for changed values
-		upd := make(map[string]any)
+		upd := make(map[string]*updatedField)
+		allvals := make(map[string]any)
 
 		val := reflect.ValueOf(obj).Elem()
 
@@ -42,21 +51,24 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		if st == nil || !st.init {
 			// we don't have a state → update everything
 			for _, f := range t.fields {
-				upd[f.column] = val.Field(f.index).Interface()
+				v := val.Field(f.index).Interface()
+				upd[f.column] = &updatedField{f: f, v: v}
+				allvals[f.column] = v
 			}
 		} else {
 			for _, f := range t.fields {
 				// grab state value
 				stv, ok := st.val[f.column]
 				newv := val.Field(f.index).Interface()
+				allvals[f.column] = newv
 
 				if !ok {
 					// no value in state → just force update
-					upd[f.column] = newv
+					upd[f.column] = &updatedField{f: f, v: newv}
 					continue
 				}
 				if !reflect.DeepEqual(newv, stv) {
-					upd[f.column] = newv
+					upd[f.column] = &updatedField{f: f, v: newv}
 				}
 			}
 		}
@@ -74,8 +86,16 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			} else {
 				first = false
 			}
-			req += QuoteName(k) + " = ?"
-			flds = append(flds, export(v))
+			switch engine {
+			case EnginePostgreSQL:
+				// need to add $1, $2, $3, ...
+				req += QuoteName(k) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
+			case EngineMySQL:
+				fallthrough
+			default:
+				req += QuoteName(k) + " = ?"
+			}
+			flds = append(flds, engine.export(v.v, v.f))
 		}
 		req += " WHERE "
 		first = true
@@ -86,8 +106,17 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			} else {
 				first = false
 			}
-			req += QuoteName(col) + " = ?"
-			flds = append(flds, export(val.Field(t.fldcol[col].index).Interface()))
+
+			switch engine {
+			case EnginePostgreSQL:
+				// need to add $1, $2, $3, ...
+				req += QuoteName(col) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
+			case EngineMySQL:
+				fallthrough
+			default:
+				req += QuoteName(col) + " = ?"
+			}
+			flds = append(flds, engine.export(val.Field(t.fldcol[col].index).Interface(), t.fldcol[col]))
 		}
 
 		_, err := ExecContext(ctx, req, flds...)
@@ -98,11 +127,11 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			if st.init {
 				// update state since update was successful
 				for k, v := range upd {
-					st.val[k] = v
+					st.val[k] = v.v
 				}
 			} else {
 				st.init = true
-				st.val = upd
+				st.val = allvals
 			}
 		}
 	}

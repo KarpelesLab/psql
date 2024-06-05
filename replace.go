@@ -38,6 +38,8 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	}
 	defer stmt.Close()
 
+	engine := GetBackend(ctx).Engine()
+
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()
 
@@ -50,7 +52,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 					continue
 				}
 			}
-			params[n] = export(fval.Interface())
+			params[n] = engine.export(fval.Interface(), f)
 		}
 
 		_, err := stmt.ExecContext(ctx, params...)

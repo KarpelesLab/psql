@@ -7,11 +7,12 @@ import (
 	"time"
 )
 
-// export transforms various known types to types easier to handle for MySQL
-func export(in any) any {
+// export transforms various known types to types easier to handle for the SQL server
+func (e Engine) export(in any, f *structField) any {
 	if in == nil {
 		return nil
 	}
+
 	switch v := in.(type) {
 	case time.Time:
 		if v.IsZero() {
@@ -22,7 +23,7 @@ func export(in any) any {
 		if v == nil {
 			return nil
 		}
-		return export(*v)
+		return e.export(*v, f)
 	case fmt.Stringer:
 		return v.String()
 	case driver.Valuer:
@@ -34,7 +35,7 @@ func export(in any) any {
 			if val.IsNil() {
 				return nil
 			}
-			return export(val.Elem().Interface())
+			return e.export(val.Elem().Interface(), f)
 		}
 		return in
 	}

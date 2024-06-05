@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -132,6 +133,16 @@ func float64Setter(v reflect.Value, from sql.RawBytes) error {
 func timeSetter(v reflect.Value, from sql.RawBytes) error {
 	// parse date
 	// RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
+	if bytes.IndexByte(from, 'T') != -1 {
+		// this is a RFC3339 date
+		t, err := time.Parse(time.RFC3339Nano, string(from))
+		if err != nil {
+			return err
+		}
+		v.Set(reflect.ValueOf(t))
+		return nil
+	}
+
 	const base = "2006-01-02 15:04:05.999999"
 	const zero = "0000-00-00 00:00:00.000000"
 	switch len(from) {
@@ -150,5 +161,5 @@ func timeSetter(v reflect.Value, from sql.RawBytes) error {
 		v.Set(reflect.ValueOf(t))
 		return nil
 	}
-	return errors.New("invalid time format (bad length)")
+	return fmt.Errorf("failed to parse time: %s", from)
 }
