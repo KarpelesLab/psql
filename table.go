@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/KarpelesLab/typutil"
 )
 
 var (
@@ -270,7 +272,7 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 				vp = vp.Elem()
 			}
 			fld.setter(vp, values[i])
-			st.val[cols[i]] = dupv(v.Interface())
+			st.val[cols[i]] = typutil.DeepClone(v.Interface())
 		}
 	}
 

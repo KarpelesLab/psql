@@ -6,7 +6,7 @@ toolchain go1.21.3
 
 require (
 	github.com/KarpelesLab/pjson v0.1.9
-	github.com/KarpelesLab/typutil v0.2.8
+	github.com/KarpelesLab/typutil v0.2.12
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jackc/pgx/v5 v5.5.5
 )

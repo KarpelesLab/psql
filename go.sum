@@ -4,6 +4,10 @@ github.com/KarpelesLab/pjson v0.1.9 h1:JVmm61sLRVb+5YkUDacgM1FlB9CTOsCUhEvF+OzUM
 github.com/KarpelesLab/pjson v0.1.9/go.mod h1:gb4uSTld7I2kO2WvLdat1mN1brsS1hzSR+dWw1hL3iU=
 github.com/KarpelesLab/typutil v0.2.8 h1:4lkK1hiPjJXQobFv8A49n4tSmjFAIbzAnqpuujHmI3A=
 github.com/KarpelesLab/typutil v0.2.8/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
+github.com/KarpelesLab/typutil v0.2.11 h1:GqbVkGyPvvMy2kyaWSyhSF75ezQ0Tn2Tcu4pgMaXYOY=
+github.com/KarpelesLab/typutil v0.2.11/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
+github.com/KarpelesLab/typutil v0.2.12 h1:QBTWoyzoHE5KGs56LLKCCzZKmLc2HIwmHs1qlHve+6U=
+github.com/KarpelesLab/typutil v0.2.12/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
