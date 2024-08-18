@@ -19,4 +19,15 @@ type Table1 struct {
 obj, err := psql.Get[Table1](context.Background(), map[string]any{"Key": 42}) // this fetches entry with Key=42
 ```
 
+## go 1.23
+
+New go 1.23 iterators can be used
+
+```go
+    res, err := psql.Iter[Table1](context.Background(), map[string]any{"Key": 42}) // this fetches entry with Key=42
+    for v := range res {
+        // v is of type *Table1
+    }
+```
+
 ## Query builder

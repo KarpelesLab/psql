@@ -63,6 +63,10 @@ func Fetch[T any](ctx context.Context, where any, opts ...*FetchOptions) ([]*T, 
 	return Table[T]().Fetch(ctx, where, opts...)
 }
 
+func Iter[T any](ctx context.Context, where any, opts ...*FetchOptions) (func(func(v *T) bool), error) {
+	return Table[T]().Iter(ctx, where, opts...)
+}
+
 func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions) (*T, error) {
 	if t == nil {
 		return nil, ErrNotReady
@@ -186,4 +190,57 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	}
 
 	return final, nil
+}
+
+func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOptions) (func(func(v *T) bool), error) {
+	if t == nil {
+		return nil, ErrNotReady
+	}
+	t.check(ctx)
+	opt := resolveFetchOpts(opts)
+
+	// SELECT QUERY
+	req := B().Select(Raw(t.fldStr)).From(t.table)
+	if where != nil {
+		req = req.Where(where)
+	}
+
+	if len(opt.Sort) > 0 {
+		req = req.OrderBy(opt.Sort...)
+	}
+
+	if opt.LimitCount > 0 {
+		if opt.LimitStart > 0 {
+			req = req.Limit(opt.LimitStart, opt.LimitCount)
+		} else {
+			req = req.Limit(opt.LimitCount)
+		}
+	}
+
+	if opt.Lock {
+		req.ForUpdate = true
+	}
+
+	// run query
+	rows, err := req.RunQuery(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:fetch:run_fail", "psql.table", t.table)
+		return nil, err
+	}
+
+	iterFunc := func(yield func(v *T) bool) {
+		defer rows.Close()
+
+		for rows.Next() {
+			val, err := t.spawn(rows)
+			if err != nil {
+				// iter process has no error reporting method other than panic
+				panic(err)
+			}
+			if !yield(val) {
+				return
+			}
+		}
+	}
+	return iterFunc, nil
 }
