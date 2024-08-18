@@ -15,13 +15,13 @@ func findSetter(t reflect.Type) func(v reflect.Value, from sql.RawBytes) error {
 		t = t.Elem()
 	}
 
-	if reflect.PtrTo(t).Implements(reflect.TypeOf((*sql.Scanner)(nil)).Elem()) {
+	if reflect.PtrTo(t).Implements(reflect.TypeFor[sql.Scanner]()) {
 		return scanSetter
 	}
 
 	// most specific types
 	switch t {
-	case reflect.TypeOf(time.Time{}):
+	case reflect.TypeFor[time.Time]():
 		return timeSetter
 	}
 

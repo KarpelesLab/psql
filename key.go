@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var keyType = reflect.TypeOf(Key{})
+var keyType = reflect.TypeFor[Key]()
 
 // Name allows specifying the table name when associating a table with a struct
 //

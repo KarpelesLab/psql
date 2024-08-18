@@ -36,7 +36,7 @@ type TableMetaIntf interface {
 // Table returns the table object for T against DefaultBackend unless the provided
 // ctx value has a backend.
 func Table[T any]() *TableMeta[T] {
-	typ := reflect.TypeOf((*T)(nil)).Elem()
+	typ := reflect.TypeFor[T]()
 
 	if typ.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("target must be a *struct, got a %s", typ))

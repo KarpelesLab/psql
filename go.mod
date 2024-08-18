@@ -1,8 +1,6 @@
 module github.com/KarpelesLab/psql
 
-go 1.21
-
-toolchain go1.21.3
+go 1.22
 
 require (
 	github.com/KarpelesLab/pjson v0.1.9
