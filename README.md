@@ -25,6 +25,9 @@ New go 1.23 iterators can be used
 
 ```go
     res, err := psql.Iter[Table1](context.Background(), map[string]any{"Key": 42}) // this fetches entry with Key=42
+    if err != nil {
+        return err
+    }
     for v := range res {
         // v is of type *Table1
     }
