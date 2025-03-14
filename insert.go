@@ -30,10 +30,15 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 		return ErrNotReady
 	}
 	t.check(ctx)
-	// INSERT QUERY
-	req := "INSERT INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES ("
 
-	engine := GetBackend(ctx).Engine()
+	be := GetBackend(ctx)
+	engine := be.Engine()
+
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
+	// INSERT QUERY
+	req := "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
 
 	switch engine {
 	case EnginePostgreSQL:
@@ -53,7 +58,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	req += ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:prep_fail", "psql.table", t.table)
+		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:prep_fail", "psql.table", tableName)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
@@ -75,7 +80,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:run_fail", "psql.table", t.table)
+			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
 		}
 	}
@@ -95,16 +100,22 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 		return ErrNotReady
 	}
 	t.check(ctx)
+
+	be := GetBackend(ctx)
+
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
 	// INSERT IGNORE QUERY
-	req := "INSERT IGNORE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	req := "INSERT IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:prep_fail", "psql.table", t.table)
+		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:prep_fail", "psql.table", tableName)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
 
-	engine := GetBackend(ctx).Engine()
+	engine := be.Engine()
 
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()
@@ -123,7 +134,7 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:run_fail", "psql.table", t.table)
+			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
 		}
 	}

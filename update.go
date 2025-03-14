@@ -38,7 +38,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		return errors.New("cannot update values without a unique key")
 	}
 
-	engine := GetBackend(ctx).Engine()
+	be := GetBackend(ctx)
+	engine := be.Engine()
 
 	for _, obj := range target {
 		// check for changed values
@@ -76,8 +77,12 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			// no update needed
 			continue
 		}
+
 		// perform update
-		req := "UPDATE " + QuoteName(t.table) + " SET "
+		// Format the table name using the namer
+		tableName := be.Namer().TableName(t.table)
+
+		req := "UPDATE " + QuoteName(tableName) + " SET "
 		var flds []any
 		first := true
 		for k, v := range upd {

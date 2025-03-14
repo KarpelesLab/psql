@@ -1,7 +1,6 @@
 package psql
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -50,21 +49,9 @@ func Table[T any]() *TableMeta[T] {
 		return found.(*TableMeta[T])
 	}
 
-	// Get the backend to use its namer
-	ctx := context.Background()
-	be := GetBackend(ctx)
-
-	// Use namer if available, otherwise use legacy formatting
-	var tableName string
-	if be != nil && be.namer != nil {
-		tableName = be.namer.TableName(typ.Name())
-	} else {
-		tableName = FormatTableName(typ.Name())
-	}
-
 	info := &TableMeta[T]{
 		typ:    typ,
-		table:  tableName,
+		table:  FormatTableName(typ.Name()),
 		fldcol: make(map[string]*structField),
 		attrs:  make(map[string]string),
 		state:  -1,
@@ -82,10 +69,7 @@ func Table[T any]() *TableMeta[T] {
 		col := finfo.Name
 		attrs := make(map[string]string)
 
-		// Apply naming strategy for columns if backend and namer available
-		if be != nil && be.namer != nil {
-			col = be.namer.ColumnName(tableName, col)
-		}
+		// Column name transformations will happen at query time
 
 		tag := finfo.Tag.Get("sql")
 		if tag != "" {

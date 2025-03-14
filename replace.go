@@ -29,16 +29,22 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 		return ErrNotReady
 	}
 	t.check(ctx)
+
+	be := GetBackend(ctx)
+
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
 	// REPLACE QUERY
-	req := "REPLACE INTO " + QuoteName(t.table) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	req := "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
-		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:prep_fail", "psql.table", t.table)
+		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:prep_fail", "psql.table", tableName)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
 
-	engine := GetBackend(ctx).Engine()
+	engine := be.Engine()
 
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()
@@ -57,7 +63,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 
 		_, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
-			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", t.table)
+			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
 		}
 	}

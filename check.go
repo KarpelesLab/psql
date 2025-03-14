@@ -95,9 +95,14 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 	if len(alterData) > 0 {
 		// TODO
 		// SET enable_experimental_alter_column_type_general = true; cockroach does not support modifying a column without that
+		be := GetBackend(ctx)
+
+		// Format the table name using the namer
+		tableName := be.Namer().TableName(t.table)
+
 		s := &strings.Builder{}
 		s.WriteString("ALTER TABLE ")
-		s.WriteString(QuoteName(t.table))
+		s.WriteString(QuoteName(tableName))
 		s.WriteByte(' ')
 		for n, req := range alterData {
 			if n > 0 {
@@ -124,7 +129,13 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		}
 		keys[n] = k
 	}
-	indices, err := QT[pgShowIndex]("SHOW INDEX FROM " + QuoteName(t.table)).All(ctx)
+
+	// We need to get the backend again here
+	be := GetBackend(ctx)
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
+	indices, err := QT[pgShowIndex]("SHOW INDEX FROM " + QuoteName(tableName)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("while doing SHOW INDEX: %w", err)
 	}
@@ -148,39 +159,129 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		}
 	}
 	for _, k := range keys {
+		// need to create this key
 		alterData = append(alterData, "ADD "+k.defString(EnginePostgreSQL))
 	}
 
-	// TODO: SHOW TABLE STATUS LIKE 'table'
-	// → check Engine
+	// alter for keys
+	if len(alterData) > 0 {
+		s := &strings.Builder{}
+		s.WriteString("ALTER TABLE ")
+		s.WriteString(QuoteName(tableName))
+		s.WriteByte(' ')
+		for n, req := range alterData {
+			if n > 0 {
+				s.WriteString(", ")
+			}
+			s.WriteString(req)
+		}
+		slog.Warn(fmt.Sprintf("[psql] Would update keys: %s", s.String()), "event", "psql:check:would_alter", "table", t.table)
+		//err = Q(s.String()).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("while updating key on table %s: %w", t.table, err)
+		}
 
-	// TODO: SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = %database AND `TABLE_SCHEMA` = %database AND `TABLE_NAME` = %table AND `CONSTRAINT_TYPE` = 'FOREIGN KEY'
-	// → check foreign keys
+		alterData = nil
+	}
+
+	return nil
+}
+
+func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
+	be := GetBackend(ctx)
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
+	// CREATE TABLE
+	sb := &strings.Builder{}
+
+	// build query
+	sb.WriteString("CREATE TABLE ")
+	sb.WriteString(QuoteName(tableName))
+	sb.WriteString(" (")
+
+	// fields
+	for n, f := range t.fields {
+		if n > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(f.defString(EnginePostgreSQL))
+	}
+
+	// keys & indexes
+	for _, k := range t.keys {
+		if len(k.fields) == 0 {
+			continue
+		}
+		sb.WriteString(", ")
+		sb.WriteString(k.defString(EnginePostgreSQL))
+	}
+
+	// end query
+	sb.WriteByte(')')
+
+	if err := Q(sb.String()).Exec(ctx); err != nil {
+		return fmt.Errorf("while creating structure: %w", err)
+	}
 
 	return nil
 }
 
 func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
+	be := GetBackend(ctx)
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
+
+	// select TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA="database" and TABLE_NAME="table"
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
 	}
-	// SHOW FULL FIELDS FROM `table`
-	// SHOW TABLE STATUS LIKE 'table' (engine)
-	// SHOW INDEX FROM `table`
-	// SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_SCHEMA` = '.$this->quote($this->database).' AND `TABLE_NAME` = '.$this->quote($table_name).' AND `CONSTRAINT_TYPE` = \'FOREIGN KEY\'
 
-	// The optional FULL keyword causes the output to include the column collation and comments, as well as the privileges you have for each column.
-	fList, err := QT[mysqlShowFieldsResult]("SHOW FULL FIELDS FROM " + QuoteName(t.table)).All(ctx)
+	sb := &strings.Builder{}
+
+	// build query
+	sb.WriteString("SHOW TABLES LIKE '")
+	sb.WriteString(strings.ReplaceAll(tableName, "'", "\\'"))
+	sb.WriteString("'")
+
+	rows, err := doQueryContext(ctx, sb.String())
 	if err != nil {
-		if IsNotExist(err) {
-			// We simply need to create this table
-			return t.createTableMySQL(ctx)
-		}
 		return err
 	}
+	defer rows.Close()
 
-	slog.Debug(fmt.Sprintf("[psql] Checking structure of table %s", t.table), "event", "psql:check", "psql.table", t.table)
+	if !rows.Next() {
+		// No matching table
+		return t.createTableMySQL(ctx)
+	}
+	// SHOW FIELDS for table
+	sb.Reset()
+	sb.WriteString("SHOW FIELDS FROM ")
+	sb.WriteString(QuoteName(tableName))
+
+	rows, err = doQueryContext(ctx, sb.String())
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// get all data from mysql - Field, Type, Null, Key, Default, Extra
+	var field, typ, null, key, xtra, priv, comment string
+	var dflt *string
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	var alterData []string
+
+	// prepare scan for row
+	vars := []any{&field, &typ, &null, &key, &dflt, &xtra}
+	if len(cols) >= 8 {
+		vars = append(vars, &priv, &comment)
+	} else if len(cols) >= 7 {
+		vars = append(vars, &priv)
+	}
 
 	// index fields by name
 	flds := make(map[string]*structField)
@@ -191,19 +292,24 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		flds[f.column] = f
 	}
 
-	var alterData []string
+	// scan each row
+	for rows.Next() {
+		err := rows.Scan(vars...)
+		if err != nil {
+			return err
+		}
 
-	for _, fInfo := range fList {
-		f, ok := flds[fInfo.Field]
+		// find column
+		f, ok := flds[field]
 		if !ok {
-			slog.Warn(fmt.Sprintf("[psql:check] unused field %s.%s in structure", t.table, fInfo.Field), "event", "psql:check:unused_field", "psql.table", t.table, "psql.field", fInfo.Field)
+			slog.Warn(fmt.Sprintf("[psql:check] field %s.%s missing in structure", t.table, field), "event", "psql:check:unused_field", "psql.table", t.table, "psql.field", field)
 			// TODO check if there is a DROP or RENAME rule for this field
 			continue
 		}
-		delete(flds, fInfo.Field)
-		ok, err := f.matches(EngineMySQL, fInfo.Type, fInfo.Null, fInfo.Collation, fInfo.Default)
+		delete(flds, field)
+		ok, err = f.matches(EngineMySQL, typ, null, &key, dflt)
 		if err != nil {
-			return fmt.Errorf("field %s.%s fails check: %w", t.table, fInfo.Field, err)
+			return fmt.Errorf("field %s.%s fails check: %w", t.table, field, err)
 		}
 		if !ok {
 			// generate alter query
@@ -217,32 +323,73 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		alterData = append(alterData, "ADD "+f.defString(EngineMySQL))
 	}
 
-	kList, err := QT[mysqlShowIndexResult]("SHOW INDEX FROM " + QuoteName(t.table)).All(ctx)
-	if err != nil {
-		return fmt.Errorf("while doing SHOW INDEX: %w", err)
-	}
-
 	// index keys by name
 	keys := make(map[string]*structKey)
 	for _, k := range t.keys {
-		n := k.keyname()
-		if _, found := keys[n]; found {
-			return fmt.Errorf("invalid table structure, key %s.%s is defined multiple times", t.table, n)
+		if k.index >= 0 {
+			keys[k.key] = k
+		} else {
+			keys[k.name] = k
 		}
-		keys[n] = k
 	}
 
-	for _, kInfo := range kList {
-		k, ok := keys[kInfo.KeyName]
+	sb.Reset()
+	sb.WriteString("SHOW INDEX FROM ")
+	sb.WriteString(QuoteName(tableName))
+
+	rows2, err := doQueryContext(ctx, sb.String())
+	if err != nil {
+		return err
+	}
+	defer rows2.Close()
+
+	var keydata = make(map[string]*keyinfo)
+
+	var nTable, nNonUnique, nKey, nSeq *string
+	var nCol, nCollation, nCardinality, nSub, nPacked, nNull, nType, nComment, nExpr *string
+
+	cols, err = rows2.Columns()
+	if err != nil {
+		return err
+	}
+
+	vars = []any{&nTable, &nNonUnique, &nKey, &nSeq, &nCol, &nCollation, &nCardinality, &nSub, &nPacked, &nNull, &nType, &nComment}
+	if len(cols) >= 13 {
+		vars = append(vars, &nExpr)
+	}
+
+	for rows2.Next() {
+		err := rows2.Scan(vars...)
+		if err != nil {
+			return err
+		}
+
+		ki, ok := keydata[*nKey]
 		if !ok {
-			slog.Warn(fmt.Sprintf("[psql:check] unused key %s.%s in structure", t.table, kInfo.KeyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", kInfo.KeyName)
-			// TODO check if there is a DROP or RENAME rule for this key
+			ki = &keyinfo{
+				name:     *nKey,
+				nonuniq:  *nNonUnique == "1",
+				keytype:  *nType,
+				keyparts: make(map[string]string),
+			}
+			keydata[*nKey] = ki
+		}
+		if *nCol != "" {
+			ki.keyparts[*nCol] = *nSeq
+		}
+	}
+
+	// check key for table
+	for keyname, keyinfo := range keydata {
+		k, ok := keys[keyname]
+		if !ok {
+			slog.Warn(fmt.Sprintf("[psql:check] key %s.%s missing in structure", t.table, keyname), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", keyname)
 			continue
 		}
-		delete(keys, kInfo.KeyName)
-		ok, err := k.matches(kInfo)
+		delete(keys, keyname)
+		ok, err := k.matches(keyinfo)
 		if err != nil {
-			return fmt.Errorf("key %s.%s fails check: %w", t.table, kInfo.KeyName, err)
+			return fmt.Errorf("key %s.%s fails check: %w", t.table, keyname, err)
 		}
 		if !ok {
 			// we can't change a key, but we can drop & recreate it
@@ -251,28 +398,24 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		}
 	}
 	for _, k := range keys {
+		// need to create this key
 		alterData = append(alterData, "ADD "+k.defString(EngineMySQL))
 	}
 
-	// TODO: SHOW TABLE STATUS LIKE 'table'
-	// → check Engine
-
-	// TODO: SELECT * FROM information_schema.TABLE_CONSTRAINTS WHERE `CONSTRAINT_SCHEMA` = %database AND `TABLE_SCHEMA` = %database AND `TABLE_NAME` = %table AND `CONSTRAINT_TYPE` = 'FOREIGN KEY'
-	// → check foreign keys
-
 	if len(alterData) > 0 {
-		s := &strings.Builder{}
-		s.WriteString("ALTER TABLE ")
-		s.WriteString(QuoteName(t.table))
-		s.WriteByte(' ')
+		// run alter
+		sb.Reset()
+		sb.WriteString("ALTER TABLE ")
+		sb.WriteString(QuoteName(tableName))
+		sb.WriteByte(' ')
 		for n, req := range alterData {
 			if n > 0 {
-				s.WriteString(", ")
+				sb.WriteString(", ")
 			}
-			s.WriteString(req)
+			sb.WriteString(req)
 		}
-		slog.Debug(fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_alter", "table", t.table)
-		err = Q(s.String()).Exec(ctx)
+		slog.Debug(fmt.Sprintf("[psql] Performing: %s", sb.String()), "event", "psql:check:perform_alter", "table", t.table)
+		err = Q(sb.String()).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("while updating table %s: %w", t.table, err)
 		}
@@ -280,62 +423,49 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 	return nil
 }
 
-func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
-	slog.DebugContext(ctx, fmt.Sprintf("[psql] Creating table %s", t.table), "event", "psql:check:create_table", "table", t.table)
+func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
+	be := GetBackend(ctx)
+	// Format the table name using the namer
+	tableName := be.Namer().TableName(t.table)
 
-	// Prepare a CREATE TABLE query
-	s := &strings.Builder{}
-	s.WriteString("CREATE TABLE ")
-	s.WriteString(QuoteName(t.table))
-	s.WriteString(" (")
+	// CREATE TABLE
+	sb := &strings.Builder{}
 
-	for n, field := range t.fields {
+	// build query
+	sb.WriteString("CREATE TABLE ")
+	sb.WriteString(QuoteName(tableName))
+	sb.WriteString(" (")
+
+	// fields
+	for n, f := range t.fields {
 		if n > 0 {
-			s.WriteString(", ")
+			sb.WriteString(", ")
 		}
-		s.WriteString(field.defString(EnginePostgreSQL))
+		sb.WriteString(f.defString(EngineMySQL))
 	}
-	for _, key := range t.keys {
-		s.WriteString(", ")
-		s.WriteString(key.defString(EnginePostgreSQL))
-	}
-	// TODO add keys
-	s.WriteString(")")
 
-	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	err := Q(s.String()).Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("while creating table %s: %w", t.table, err)
+	// keys & indexes
+	for _, k := range t.keys {
+		if len(k.fields) == 0 {
+			continue
+		}
+		sb.WriteString(", ")
+		sb.WriteString(k.defString(EngineMySQL))
 	}
+
+	// end query
+	sb.WriteByte(')')
+
+	if err := Q(sb.String()).Exec(ctx); err != nil {
+		return fmt.Errorf("while creating structure: %w", err)
+	}
+
 	return nil
 }
 
-func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
-	slog.DebugContext(ctx, fmt.Sprintf("[psql] Creating table %s", t.table), "event", "psql:check:create_table", "table", t.table)
-
-	// Prepare a CREATE TABLE query
-	s := &strings.Builder{}
-	s.WriteString("CREATE TABLE ")
-	s.WriteString(QuoteName(t.table))
-	s.WriteString(" (")
-
-	for n, field := range t.fields {
-		if n > 0 {
-			s.WriteString(", ")
-		}
-		s.WriteString(field.defString(EngineMySQL))
-	}
-	for _, key := range t.keys {
-		s.WriteString(", ")
-		s.WriteString(key.defString(EngineMySQL))
-	}
-	// TODO add keys
-	s.WriteString(")")
-
-	slog.DebugContext(ctx, fmt.Sprintf("[psql] Performing: %s", s.String()), "event", "psql:check:perform_create", "table", t.table)
-	err := Q(s.String()).Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("while creating table %s: %w", t.table, err)
-	}
-	return nil
+type keyinfo struct {
+	name     string
+	nonuniq  bool
+	keytype  string
+	keyparts map[string]string
 }
