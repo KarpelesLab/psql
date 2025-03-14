@@ -21,6 +21,7 @@ type Backend struct {
 	engine    Engine
 	checked   map[reflect.Type]bool
 	checkedLk sync.RWMutex
+	namer     Namer // custom namer for table/column names
 }
 
 // New returns a Backend that connects to the provided database
@@ -68,7 +69,12 @@ func NewMySQL(cfg *mysql.Config) (*Backend, error) {
 		slog.Debug(fmt.Sprintf("[mysql] %s = %s", k, v), "event", "psql:init:dbvar", "psql.dbvar", k)
 	}
 
-	b := &Backend{db: db, engine: EngineMySQL, checked: make(map[reflect.Type]bool)}
+	b := &Backend{
+		db:      db,
+		engine:  EngineMySQL,
+		checked: make(map[reflect.Type]bool),
+		namer:   &LegacyNamer{}, // Default to LegacyNamer for backward compatibility
+	}
 
 	return b, nil
 }
@@ -78,7 +84,13 @@ func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &Backend{db: stdlib.OpenDBFromPool(pgdb), pgdb: pgdb, engine: EnginePostgreSQL, checked: make(map[reflect.Type]bool)}
+	b := &Backend{
+		db:      stdlib.OpenDBFromPool(pgdb),
+		pgdb:    pgdb,
+		engine:  EnginePostgreSQL,
+		checked: make(map[reflect.Type]bool),
+		namer:   &LegacyNamer{}, // Default to LegacyNamer for backward compatibility
+	}
 	b.db.SetConnMaxLifetime(time.Minute * 3)
 	b.db.SetMaxOpenConns(128)
 	b.db.SetMaxIdleConns(32)
@@ -102,6 +114,23 @@ func (be *Backend) Engine() Engine {
 		return EngineUnknown
 	}
 	return be.engine
+}
+
+// Namer returns the configured naming strategy
+func (be *Backend) Namer() Namer {
+	if be == nil || be.namer == nil {
+		// If backend or namer is nil, return default legacy namer
+		return &LegacyNamer{}
+	}
+	return be.namer
+}
+
+// SetNamer allows changing the naming strategy
+func (be *Backend) SetNamer(n Namer) {
+	if be == nil {
+		return
+	}
+	be.namer = n
 }
 
 // checkOnce return true if a table has been checked once, or false otherwise

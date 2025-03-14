@@ -5,7 +5,7 @@ GOPATH:=$(shell $(GOROOT)/bin/go env GOPATH)
 .PHONY: test deps
 
 all:
-	$(GOPATH)/bin/goimports -w -l .
+	GOROOT="$(GOROOT)" $(GOPATH)/bin/goimports -w -l .
 	$(GOROOT)/bin/go build -v
 
 deps:

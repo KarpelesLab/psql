@@ -106,6 +106,7 @@ func (t tableName) EscapeTable() string {
 }
 
 // quote a name (field, etc)
+// This doesn't use the Namer since this is just for escaping a name that's already been formatted
 func QuoteName(v string) string {
 	pos := strings.IndexByte(v, NameQuoteRune)
 	if pos == -1 {
