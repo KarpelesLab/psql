@@ -21,34 +21,34 @@ type structField struct {
 }
 
 // getAttrs returns the fields' attrs for a given Engine, which can be cached for performance
-func (f *structField) getAttrs(e Engine) map[string]string {
-	if r, ok := f.rattrs[e]; ok {
+func (f *structField) getAttrs(be *Backend) map[string]string {
+	if r, ok := f.rattrs[be.Engine()]; ok {
 		return r
 	}
-	f.rattrs[e] = f.resolveAttrs(e, f.attrs)
-	return f.rattrs[e]
+	f.rattrs[be.Engine()] = f.resolveAttrs(be, f.attrs)
+	return f.rattrs[be.Engine()]
 }
 
-func (f *structField) resolveAttrs(e Engine, attrs map[string]string) map[string]string {
+func (f *structField) resolveAttrs(be *Backend, attrs map[string]string) map[string]string {
 	// check for import
 	if imp, ok := attrs["import"]; ok {
 		var res map[string]string
 		// load it from magic
-		if magic, ok := magicEngineTypes[e][f.column+"+"+imp]; ok {
+		if magic, ok := magicEngineTypes[be.Engine()][f.column+"+"+imp]; ok {
 			// found a magic type
-			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
+			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
 		} else if magic, ok := magicTypes[f.column+"+"+imp]; ok {
 			// found a magic type
-			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
-		} else if magic, ok := magicEngineTypes[e][imp]; ok {
+			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
+		} else if magic, ok := magicEngineTypes[be.Engine()][imp]; ok {
 			// found a magic type
-			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
+			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
 		} else if magic, ok = magicTypes[imp]; ok {
 			// found a magic type
-			res = f.resolveAttrs(e, parseAttrs(magic)) // recursive allowed
+			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
 		} else {
 			res = make(map[string]string)
-			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s engine %s", imp, f.column, e), "event", "psql:field:attr:missing_import", "psql.field", f.name)
+			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s engine %s", imp, f.column, be.Engine()), "event", "psql:field:attr:missing_import", "psql.field", f.name)
 		}
 
 		// override any values from the import
@@ -66,8 +66,8 @@ func (f *structField) resolveAttrs(e Engine, attrs map[string]string) map[string
 	return attrs
 }
 
-func (f *structField) sqlType(e Engine) string {
-	attrs := f.getAttrs(e)
+func (f *structField) sqlType(be *Backend) string {
+	attrs := f.getAttrs(be)
 	if attrs == nil {
 		return ""
 	}
@@ -81,7 +81,7 @@ func (f *structField) sqlType(e Engine) string {
 
 	switch mytyp {
 	case "enum", "set":
-		if e == EnginePostgreSQL {
+		if be.Engine() == EnginePostgreSQL {
 			switch mytyp {
 			case "enum":
 				// TODO FIXME stopgap
@@ -103,7 +103,7 @@ func (f *structField) sqlType(e Engine) string {
 			return ""
 		}
 	default:
-		if e == EnginePostgreSQL {
+		if be.Engine() == EnginePostgreSQL {
 			// pgsql requires int types to have no length
 			if x, ok := numericTypes[mytyp]; ok && x {
 				return mytyp
@@ -141,15 +141,15 @@ func (f *structField) sqlType(e Engine) string {
 	      [check_constraint_definition]
 	}
 */
-func (f *structField) defString(e Engine) string {
-	attrs := f.getAttrs(e)
-	mytyp := f.sqlType(e)
+func (f *structField) defString(be *Backend) string {
+	attrs := f.getAttrs(be)
+	mytyp := f.sqlType(be)
 	if mytyp == "" {
 		return ""
 	}
 	setType := false
 
-	if e == EnginePostgreSQL && mytyp == "set" {
+	if be.Engine() == EnginePostgreSQL && mytyp == "set" {
 		mytyp = "jsonb"
 		setType = true
 	}
@@ -169,7 +169,7 @@ func (f *structField) defString(e Engine) string {
 		}
 	}
 	if def, ok := attrs["default"]; ok {
-		switch e {
+		switch be.Engine() {
 		case EnginePostgreSQL:
 			// there are various things to take into account if engine is pgsql
 			if setType {
@@ -198,13 +198,13 @@ func (f *structField) defString(e Engine) string {
 	return mydef
 }
 
-func (f *structField) matches(e Engine, typ, null string, col, dflt *string) (bool, error) {
-	attrs := f.getAttrs(e)
+func (f *structField) matches(be *Backend, typ, null string, col, dflt *string) (bool, error) {
+	attrs := f.getAttrs(be)
 	if attrs == nil {
 		return false, errors.New("no valid field defined")
 	}
 
-	myType := f.sqlType(e)
+	myType := f.sqlType(be)
 	if a, b := numericTypes[typ]; myType != typ && a && b {
 		// typ we got from mysql is different, but that might not be an issue
 		if typ == strings.ToLower(attrs["type"]) {

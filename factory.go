@@ -21,7 +21,7 @@ func (t *TableMeta[T]) Factory(ctx context.Context) *T {
 	obj := objptr.Elem()
 
 	for _, f := range t.fields {
-		def, ok := f.getAttrs(GetBackend(ctx).Engine())["default"]
+		def, ok := f.getAttrs(GetBackend(ctx))["default"]
 		if !ok {
 			continue
 		}

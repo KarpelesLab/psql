@@ -94,7 +94,7 @@ func (k *structKey) sqlKeyName() string {
 	return "INDEX " + QuoteName(k.key)
 }
 
-func (k *structKey) defString(e Engine) string {
+func (k *structKey) defString(be *Backend) string {
 	s := &strings.Builder{}
 
 	switch k.typ {

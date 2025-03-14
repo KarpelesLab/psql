@@ -18,12 +18,12 @@ func (t *TableMeta[T]) check(ctx context.Context) {
 	// perform check
 	switch be.engine {
 	case EngineMySQL:
-		err := t.checkStructureMySQL(ctx)
+		err := t.checkStructureMySQL(ctx, be)
 		if err != nil {
 			slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", t.table, err), "event", "psql:table:check_error", "psql.table", t.table)
 		}
 	case EnginePostgreSQL:
-		err := t.checkStructurePG(ctx)
+		err := t.checkStructurePG(ctx, be)
 		if err != nil {
 			log.Printf("err = %s", err)
 			slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", t.table, err), "event", "psql:table:check_error", "psql.table", t.table)
@@ -31,7 +31,7 @@ func (t *TableMeta[T]) check(ctx context.Context) {
 	}
 }
 
-func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
+func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error {
 	if v, ok := t.attrs["check"]; ok && v == "0" {
 		// do not check table
 		return nil
@@ -42,7 +42,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
-			return t.createTablePG(ctx)
+			return t.createTablePG(ctx, be)
 		}
 		return err
 	}
@@ -74,7 +74,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 			continue
 		}
 		delete(flds, fInfo.Column)
-		ok, err := f.matches(EnginePostgreSQL, fInfo.DataType, string(fInfo.IsNullable), nil, nil) // fInfo.Collation, fInfo.Default)
+		ok, err := f.matches(be, fInfo.DataType, string(fInfo.IsNullable), nil, nil) // fInfo.Collation, fInfo.Default)
 		if err != nil {
 			return fmt.Errorf("field %s.%s fails check: %w", t.table, fInfo.Column, err)
 		}
@@ -88,7 +88,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		//log.Printf("field=%s typ=%s col=%s null=%s key=%s, dflt=%s xtra=%s priv=%s comment=%s", field, typ, col, null, key, dflt, xtra, priv, comment)
 	}
 	for _, f := range flds {
-		alterData = append(alterData, "ADD "+f.defString(EnginePostgreSQL))
+		alterData = append(alterData, "ADD "+f.defString(be))
 	}
 
 	// run alter table now, keys do not work the same as fields with pgsql
@@ -130,8 +130,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		keys[n] = k
 	}
 
-	// We need to get the backend again here
-	be := GetBackend(ctx)
 	// Format the table name using the namer
 	tableName := be.Namer().TableName(t.table)
 
@@ -155,12 +153,12 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 		if !ok {
 			// we can't change a key, but we can drop & recreate it
 			alterData = append(alterData, "DROP "+k.sqlKeyName())
-			alterData = append(alterData, "ADD "+k.defString(EnginePostgreSQL))
+			alterData = append(alterData, "ADD "+k.defString(be))
 		}
 	}
 	for _, k := range keys {
 		// need to create this key
-		alterData = append(alterData, "ADD "+k.defString(EnginePostgreSQL))
+		alterData = append(alterData, "ADD "+k.defString(be))
 	}
 
 	// alter for keys
@@ -187,8 +185,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context) error {
 	return nil
 }
 
-func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
-	be := GetBackend(ctx)
+func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 	// Format the table name using the namer
 	tableName := be.Namer().TableName(t.table)
 
@@ -205,7 +202,7 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
 		if n > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(f.defString(EnginePostgreSQL))
+		sb.WriteString(f.defString(be))
 	}
 
 	// keys & indexes
@@ -214,7 +211,7 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
 			continue
 		}
 		sb.WriteString(", ")
-		sb.WriteString(k.defString(EnginePostgreSQL))
+		sb.WriteString(k.defString(be))
 	}
 
 	// end query
@@ -227,8 +224,7 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context) error {
 	return nil
 }
 
-func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
-	be := GetBackend(ctx)
+func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context, be *Backend) error {
 	// Format the table name using the namer
 	tableName := be.Namer().TableName(t.table)
 
@@ -307,20 +303,20 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 			continue
 		}
 		delete(flds, field)
-		ok, err = f.matches(EngineMySQL, typ, null, &key, dflt)
+		ok, err = f.matches(be, typ, null, &key, dflt)
 		if err != nil {
 			return fmt.Errorf("field %s.%s fails check: %w", t.table, field, err)
 		}
 		if !ok {
 			// generate alter query
-			alterData = append(alterData, "MODIFY "+f.defString(EngineMySQL))
+			alterData = append(alterData, "MODIFY "+f.defString(be))
 		}
 		// field=Log__ typ=char(36) col=latin1_general_ci null=NO key=PRI, dflt=%!s(*string=<nil>) xtra= priv=select,insert,update,references comment=
 		// field=Secure_Key__ typ=char(36) col=latin1_general_ci null=NO key=, dflt=%!s(*string=0xc0000b6420) xtra= priv=select,insert,update,references comment=
 		//log.Printf("field=%s typ=%s col=%s null=%s key=%s, dflt=%s xtra=%s priv=%s comment=%s", field, typ, col, null, key, dflt, xtra, priv, comment)
 	}
 	for _, f := range flds {
-		alterData = append(alterData, "ADD "+f.defString(EngineMySQL))
+		alterData = append(alterData, "ADD "+f.defString(be))
 	}
 
 	// index keys by name
@@ -394,12 +390,12 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context) error {
 		if !ok {
 			// we can't change a key, but we can drop & recreate it
 			alterData = append(alterData, "DROP "+k.sqlKeyName())
-			alterData = append(alterData, "ADD "+k.defString(EngineMySQL))
+			alterData = append(alterData, "ADD "+k.defString(be))
 		}
 	}
 	for _, k := range keys {
 		// need to create this key
-		alterData = append(alterData, "ADD "+k.defString(EngineMySQL))
+		alterData = append(alterData, "ADD "+k.defString(be))
 	}
 
 	if len(alterData) > 0 {
@@ -441,7 +437,7 @@ func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
 		if n > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(f.defString(EngineMySQL))
+		sb.WriteString(f.defString(be))
 	}
 
 	// keys & indexes
@@ -450,7 +446,7 @@ func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
 			continue
 		}
 		sb.WriteString(", ")
-		sb.WriteString(k.defString(EngineMySQL))
+		sb.WriteString(k.defString(be))
 	}
 
 	// end query
