@@ -9,6 +9,7 @@ type Namer interface {
 	CheckerName(table, column string) string
 	IndexName(table, column string) string
 	UniqueName(table, column string) string
+	EnumTypeName(table, column string) string // For PostgreSQL ENUM types
 }
 
 // DefaultNamer is a namer that returns names as they are provided
@@ -49,6 +50,11 @@ func (DefaultNamer) UniqueName(table, column string) string {
 	return "uniq_" + table + "_" + column
 }
 
+// EnumTypeName returns the enum type name using original table and column names
+func (DefaultNamer) EnumTypeName(table, column string) string {
+	return "enum_" + table + "_" + column
+}
+
 // CamelSnakeNamer is a namer that converts names to Camel_Snake_Case
 type CamelSnakeNamer struct{}
 
@@ -85,6 +91,11 @@ func (CamelSnakeNamer) IndexName(table, column string) string {
 // UniqueName returns the unique constraint name with table and column in Camel_Snake_Case format
 func (CamelSnakeNamer) UniqueName(table, column string) string {
 	return "uniq_" + formatCamelSnakeCase(table) + "_" + formatCamelSnakeCase(column)
+}
+
+// EnumTypeName returns the enum type name with table and column in Camel_Snake_Case format
+func (CamelSnakeNamer) EnumTypeName(table, column string) string {
+	return "enum_" + formatCamelSnakeCase(table) + "_" + formatCamelSnakeCase(column)
 }
 
 // LegacyNamer reproduces the behavior of the original implementation:
@@ -126,4 +137,9 @@ func (LegacyNamer) IndexName(table, column string) string {
 // UniqueName returns the unique constraint name with table in Camel_Snake_Case format and original column name
 func (LegacyNamer) UniqueName(table, column string) string {
 	return "uniq_" + formatCamelSnakeCase(table) + "_" + column
+}
+
+// EnumTypeName returns the enum type name with table in Camel_Snake_Case format and original column name
+func (LegacyNamer) EnumTypeName(table, column string) string {
+	return "enum_" + formatCamelSnakeCase(table) + "_" + column
 }
