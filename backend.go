@@ -119,13 +119,16 @@ func (be *Backend) Engine() Engine {
 // Namer returns the configured naming strategy
 func (be *Backend) Namer() Namer {
 	if be == nil || be.namer == nil {
-		// If backend or namer is nil, return default legacy namer
+		// If backend or namer is nil, return LegacyNamer for backward compatibility
 		return &LegacyNamer{}
 	}
 	return be.namer
 }
 
 // SetNamer allows changing the naming strategy
+// Use DefaultNamer to keep names exactly as defined in structs (e.g., "HelloWorld" stays "HelloWorld")
+// Use LegacyNamer (default) for backward compatibility (e.g., "HelloWorld" becomes "Hello_World")
+// Use CamelSnakeNamer to convert all names to Camel_Snake_Case
 func (be *Backend) SetNamer(n Namer) {
 	if be == nil {
 		return

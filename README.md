@@ -21,6 +21,29 @@ type Table1 struct {
 obj, err := psql.Get[Table1](context.Background(), map[string]any{"Key": 42}) // this fetches entry with Key=42
 ```
 
+### Enum Support
+
+The library supports SQL ENUM types with different implementations for MySQL and PostgreSQL:
+
+```go
+type StatusEnum string
+
+const (
+    StatusPending  StatusEnum = "pending"
+    StatusActive   StatusEnum = "active"
+    StatusInactive StatusEnum = "inactive"
+)
+
+type MyTable struct {
+    ID     uint64     `sql:",key=PRIMARY"`
+    Status StatusEnum `sql:",type=enum,values=pending,active,inactive"`
+}
+```
+
+In MySQL, this creates a standard ENUM column.
+
+In PostgreSQL, this creates a custom type named according to the `EnumTypeName` method of the configured Namer (default: `enum_tablename_columnname`) and automatically handles type creation and column mapping.
+
 ## go 1.23
 
 New go 1.23 iterators can be used

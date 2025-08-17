@@ -34,8 +34,8 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	be := GetBackend(ctx)
 	engine := be.Engine()
 
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
 
 	// INSERT QUERY
 	req := "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
@@ -103,8 +103,8 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 
 	be := GetBackend(ctx)
 
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
 
 	// INSERT IGNORE QUERY
 	req := "INSERT IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"

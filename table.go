@@ -17,16 +17,17 @@ var (
 )
 
 type TableMeta[T any] struct {
-	typ     reflect.Type
-	table   string // table name
-	fields  []*structField
-	fldcol  map[string]*structField
-	keys    []*structKey
-	mainKey *structKey
-	fldStr  string // string of all fields
-	state   int
-	attrs   map[string]string
-	futures sync.Map
+	typ          reflect.Type
+	table        string // table name
+	explicitName bool   // true if table name was explicitly set via psql.Name
+	fields       []*structField
+	fldcol       map[string]*structField
+	keys         []*structKey
+	mainKey      *structKey
+	fldStr       string // string of all fields
+	state        int
+	attrs        map[string]string
+	futures      sync.Map
 }
 
 type TableMetaIntf interface {
@@ -91,6 +92,7 @@ func Table[T any]() *TableMeta[T] {
 		case nameType:
 			// this is actually the name of the table
 			info.table = col
+			info.explicitName = true // Mark that name was explicitly provided
 			info.attrs = attrs
 			if info.state == -1 {
 				info.state = i
@@ -176,6 +178,19 @@ func (t *TableMeta[T]) Name() string {
 		return ""
 	}
 	return t.table
+}
+
+// FormattedName returns the table name, applying the namer transformation if needed
+func (t *TableMeta[T]) FormattedName(be *Backend) string {
+	if t == nil {
+		return ""
+	}
+	if t.explicitName {
+		// Table name was explicitly set via psql.Name, use as-is
+		return t.table
+	}
+	// Apply namer transformation
+	return be.Namer().TableName(t.table)
 }
 
 func (t *TableMeta[T]) newobj() *T {

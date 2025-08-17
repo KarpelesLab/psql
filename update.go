@@ -79,8 +79,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		}
 
 		// perform update
-		// Format the table name using the namer
-		tableName := be.Namer().TableName(t.table)
+		// Get the formatted table name (respects explicit names)
+		tableName := t.FormattedName(be)
 
 		req := "UPDATE " + QuoteName(tableName) + " SET "
 		var flds []any

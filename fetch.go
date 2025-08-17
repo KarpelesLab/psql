@@ -73,7 +73,8 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 	}
 	t.check(ctx)
 	// simplified get
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
@@ -112,7 +113,8 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	}
 
 	// SELECT QUERY
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
@@ -150,7 +152,8 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
@@ -200,7 +203,8 @@ func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOption
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}

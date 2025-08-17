@@ -32,8 +32,8 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 
 	be := GetBackend(ctx)
 
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
 
 	// REPLACE QUERY
 	req := "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"

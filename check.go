@@ -2,6 +2,7 @@ package psql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
@@ -37,8 +38,33 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 		return nil
 	}
 
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
+
+	// Collect all enum constraints for this table
+	constraints := collectEnumConstraints(t, be)
+
+	// Check if constraints exist in database
+	for _, constraint := range constraints {
+		// Check if this constraint already exists
+		var exists bool
+		err := Q("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1)", constraint.Name).Each(ctx, func(rows *sql.Rows) error {
+			return rows.Scan(&exists)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check constraint %s: %w", constraint.Name, err)
+		}
+
+		if exists {
+			// TODO: Verify the constraint is correct and update if needed
+			slog.Debug(fmt.Sprintf("[psql] CHECK constraint %s already exists", constraint.Name),
+				"event", "psql:check:constraint_exists",
+				"constraint", constraint.Name)
+		}
+	}
+
 	// table = &{Virtual:{st:0xc00003e500} Catalog:defaultdb Schema:public Table:Test_Table1 TableType:BASE TABLE}
-	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", t.table).Single(ctx)
+	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", tableName).Single(ctx)
 	if err != nil {
 		if IsNotExist(err) {
 			// We simply need to create this table
@@ -50,7 +76,7 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 		return fmt.Errorf("cannot check tables of type %s", tinfo.TableType)
 	}
 
-	cols, err := QT[pgSchemaColumns]("SELECT * FROM information_schema.columns WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", t.table).All(ctx)
+	cols, err := QT[pgSchemaColumns]("SELECT * FROM information_schema.columns WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", tableName).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -95,10 +121,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 	if len(alterData) > 0 {
 		// TODO
 		// SET enable_experimental_alter_column_type_general = true; cockroach does not support modifying a column without that
-		be := GetBackend(ctx)
-
-		// Format the table name using the namer
-		tableName := be.Namer().TableName(t.table)
 
 		s := &strings.Builder{}
 		s.WriteString("ALTER TABLE ")
@@ -129,9 +151,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 		}
 		keys[n] = k
 	}
-
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
 
 	indices, err := QT[pgShowIndex]("SHOW INDEX FROM " + QuoteName(tableName)).All(ctx)
 	if err != nil {
@@ -182,12 +201,43 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 		alterData = nil
 	}
 
+	// Add any missing CHECK constraints for enums
+	for _, constraint := range constraints {
+		// Check if this constraint already exists
+		var exists bool
+		err := Q("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1 AND conrelid = $2::regclass)",
+			constraint.Name, tableName).Each(ctx, func(rows *sql.Rows) error {
+			return rows.Scan(&exists)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check constraint %s: %w", constraint.Name, err)
+		}
+
+		if !exists {
+			// Add the constraint
+			checkSQL := GenerateEnumCheckSQL(constraint, tableName)
+			if checkSQL != "" {
+				alterSQL := fmt.Sprintf("ALTER TABLE %s ADD %s", QuoteName(tableName), checkSQL)
+				slog.Debug(fmt.Sprintf("[psql] Adding CHECK constraint: %s", alterSQL),
+					"event", "psql:check:add_constraint",
+					"table", t.table,
+					"constraint", constraint.Name)
+				if err := Q(alterSQL).Exec(ctx); err != nil {
+					return fmt.Errorf("failed to add CHECK constraint %s: %w", constraint.Name, err)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
 func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
+
+	// Collect all enum constraints for this table
+	constraints := collectEnumConstraints(t, be)
 
 	// CREATE TABLE
 	sb := &strings.Builder{}
@@ -214,6 +264,15 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 		sb.WriteString(k.defString(be))
 	}
 
+	// Add CHECK constraints for enums
+	for _, constraint := range constraints {
+		checkSQL := GenerateEnumCheckSQL(constraint, tableName)
+		if checkSQL != "" {
+			sb.WriteString(", ")
+			sb.WriteString(checkSQL)
+		}
+	}
+
 	// end query
 	sb.WriteByte(')')
 
@@ -225,8 +284,8 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 }
 
 func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context, be *Backend) error {
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
 
 	// select TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA="database" and TABLE_NAME="table"
 	if v, ok := t.attrs["check"]; ok && v == "0" {
@@ -421,8 +480,8 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context, be *Backend) err
 
 func (t *TableMeta[T]) createTableMySQL(ctx context.Context) error {
 	be := GetBackend(ctx)
-	// Format the table name using the namer
-	tableName := be.Namer().TableName(t.table)
+	// Get the formatted table name (respects explicit names)
+	tableName := t.FormattedName(be)
 
 	// CREATE TABLE
 	sb := &strings.Builder{}

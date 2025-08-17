@@ -84,8 +84,13 @@ func (f *structField) sqlType(be *Backend) string {
 		if be.Engine() == EnginePostgreSQL {
 			switch mytyp {
 			case "enum":
-				// TODO FIXME stopgap
-				return "varchar(128)"
+				// For PostgreSQL, ENUMs are implemented as VARCHAR with CHECK constraints
+				// The CHECK constraint will be added separately during table creation/alteration
+				if mysize, ok := attrs["size"]; ok {
+					return "varchar(" + mysize + ")"
+				}
+				// Default size for enum columns
+				return "varchar(64)"
 			case "set":
 				// we return set but it will actually be a jsonb
 				return "varchar(128)"
