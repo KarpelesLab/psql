@@ -41,28 +41,6 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 	// Get the formatted table name (respects explicit names)
 	tableName := t.FormattedName(be)
 
-	// Collect all enum constraints for this table
-	constraints := collectEnumConstraints(t, be)
-
-	// Check if constraints exist in database
-	for _, constraint := range constraints {
-		// Check if this constraint already exists
-		var exists bool
-		err := Q("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1)", constraint.Name).Each(ctx, func(rows *sql.Rows) error {
-			return rows.Scan(&exists)
-		})
-		if err != nil {
-			return fmt.Errorf("failed to check constraint %s: %w", constraint.Name, err)
-		}
-
-		if exists {
-			// TODO: Verify the constraint is correct and update if needed
-			slog.Debug(fmt.Sprintf("[psql] CHECK constraint %s already exists", constraint.Name),
-				"event", "psql:check:constraint_exists",
-				"constraint", constraint.Name)
-		}
-	}
-
 	// table = &{Virtual:{st:0xc00003e500} Catalog:defaultdb Schema:public Table:Test_Table1 TableType:BASE TABLE}
 	tinfo, err := QT[pgSchemaTables]("SELECT * FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", tableName).Single(ctx)
 	if err != nil {
@@ -75,6 +53,9 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 	if tinfo.TableType != "BASE TABLE" {
 		return fmt.Errorf("cannot check tables of type %s", tinfo.TableType)
 	}
+
+	// Collect all enum constraints for this table
+	constraints := collectEnumConstraints(t, be)
 
 	cols, err := QT[pgSchemaColumns]("SELECT * FROM information_schema.columns WHERE table_catalog = current_database() AND table_schema = current_schema() AND table_name = $1", tableName).All(ctx)
 	if err != nil {
@@ -204,9 +185,16 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 	// Add any missing CHECK constraints for enums
 	for _, constraint := range constraints {
 		// Check if this constraint already exists
+		// Using a JOIN with pg_class to safely handle table name resolution
 		var exists bool
-		err := Q("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1 AND conrelid = $2::regclass)",
-			constraint.Name, tableName).Each(ctx, func(rows *sql.Rows) error {
+		err := Q(`SELECT EXISTS (
+			SELECT 1 FROM pg_constraint c
+			JOIN pg_class t ON c.conrelid = t.oid
+			JOIN pg_namespace n ON t.relnamespace = n.oid
+			WHERE c.conname = $1 
+			AND t.relname = $2
+			AND n.nspname = current_schema()
+		)`, constraint.Name, tableName).Each(ctx, func(rows *sql.Rows) error {
 			return rows.Scan(&exists)
 		})
 		if err != nil {
