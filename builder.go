@@ -306,7 +306,13 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 	case 1:
 		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
 	case 2:
-		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0])+",", strconv.Itoa(q.LimitData[1]))
+		// PostgreSQL uses LIMIT x OFFSET y, MySQL uses LIMIT x, y
+		if ctx.e == EnginePostgreSQL {
+			ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
+			ctx.append("OFFSET", strconv.Itoa(q.LimitData[1]))
+		} else {
+			ctx.append("LIMIT", strconv.Itoa(q.LimitData[0])+",", strconv.Itoa(q.LimitData[1]))
+		}
 	}
 	if q.ForUpdate {
 		ctx.append("FOR UPDATE")
