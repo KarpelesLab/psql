@@ -16,20 +16,20 @@ func TestBuilderLimitSyntax(t *testing.T) {
 		be := &psql.Backend{}
 		// MySQL is the default engine
 		ctx := be.Plug(context.Background())
-		
+
 		// Test LIMIT without offset
 		query := psql.B().Select().From("users").Limit(10)
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT * FROM "users" LIMIT 10`, sql)
-		
+
 		// Test LIMIT with offset (MySQL style: LIMIT x, y)
 		query = psql.B().Select().From("users").Limit(10, 20)
 		sql, err = query.Render(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT * FROM "users" LIMIT 10, 20`, sql)
 	})
-	
+
 	t.Run("PostgreSQL LIMIT syntax", func(t *testing.T) {
 		// Skip if we can't get a PostgreSQL backend
 		be, err := psql.LocalTestServer()
@@ -37,27 +37,27 @@ func TestBuilderLimitSyntax(t *testing.T) {
 			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
 			return
 		}
-		
+
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
 			return
 		}
-		
+
 		ctx := be.Plug(context.Background())
-		
+
 		// Test LIMIT without offset
 		query := psql.B().Select().From("users").Limit(10)
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT * FROM "users" LIMIT 10`, sql)
-		
+
 		// Test LIMIT with offset (PostgreSQL style: LIMIT x OFFSET y)
 		query = psql.B().Select().From("users").Limit(10, 20)
 		sql, err = query.Render(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT * FROM "users" LIMIT 10 OFFSET 20`, sql)
 	})
-	
+
 	t.Run("Complex query with LIMIT", func(t *testing.T) {
 		// Test for PostgreSQL
 		be, err := psql.LocalTestServer()
@@ -65,14 +65,14 @@ func TestBuilderLimitSyntax(t *testing.T) {
 			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
 			return
 		}
-		
+
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
 			return
 		}
-		
+
 		ctx := be.Plug(context.Background())
-		
+
 		// Complex query with WHERE, ORDER BY, and LIMIT
 		query := psql.B().
 			Select("id", "name", "email").
@@ -80,13 +80,13 @@ func TestBuilderLimitSyntax(t *testing.T) {
 			Where(map[string]any{"status": "active"}).
 			OrderBy(psql.S("created_at", "DESC")).
 			Limit(25, 100)
-		
+
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "LIMIT 25 OFFSET 100")
 		assert.NotContains(t, sql, "LIMIT 25, 100")
 	})
-	
+
 	t.Run("RenderArgs with LIMIT", func(t *testing.T) {
 		// Test that argument rendering also respects the engine
 		be, err := psql.LocalTestServer()
@@ -94,20 +94,20 @@ func TestBuilderLimitSyntax(t *testing.T) {
 			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
 			return
 		}
-		
+
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
 			return
 		}
-		
+
 		ctx := be.Plug(context.Background())
-		
+
 		query := psql.B().
 			Select().
 			From("users").
 			Where(map[string]any{"status": "active"}).
 			Limit(10, 5)
-		
+
 		sql, args, err := query.RenderArgs(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "LIMIT 10 OFFSET 5")
@@ -121,7 +121,7 @@ func TestBuilderLimitSyntax(t *testing.T) {
 func TestBuilderLimitBackwardCompatibility(t *testing.T) {
 	// Default context (no backend) should use MySQL syntax for backward compatibility
 	ctx := context.Background()
-	
+
 	query := psql.B().Select().From("products").Limit(50, 100)
 	sql, err := query.Render(ctx)
 	require.NoError(t, err)

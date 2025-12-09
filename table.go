@@ -244,7 +244,7 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 	err = rows.Scan(scan...)
 	if err != nil {
 		slog.Error(fmt.Sprintf("scan err %s", err), "event", "psql:table:scan_error", "psql.table", t.table)
-		return err
+		return fmt.Errorf("scan error: %w", err)
 	}
 
 	if st != nil {

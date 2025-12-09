@@ -180,7 +180,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 			).
 			OrderBy(psql.S("name", "ASC")).
 			Limit(50)
-		
+
 		sql, err := users.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, `SELECT "id","name","email"`)
@@ -200,7 +200,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 				"login_count": psql.Raw("login_count + 1"),
 			}).
 			Where(map[string]any{"id": userID})
-		
+
 		sql, err = update.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, `UPDATE "users"`)
@@ -220,7 +220,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 				"category_id": psql.WhereOR{1, 2, 3},
 			}).
 			OrderBy(psql.S("price", "ASC"))
-		
+
 		sql, err = search.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, `SELECT * FROM "products"`)
@@ -258,18 +258,18 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 
 	t.Run("Execution Methods", func(t *testing.T) {
 		query := psql.B().Select().From("users").Where(map[string]any{"id": 1})
-		
+
 		// Test Render
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.NotEmpty(t, sql)
-		
+
 		// Test RenderArgs
 		sqlWithArgs, args, err := query.RenderArgs(ctx)
 		require.NoError(t, err)
 		assert.NotEmpty(t, sqlWithArgs)
 		assert.NotNil(t, args)
-		
+
 		// Note: RunQuery, ExecQuery, and Prepare require a database connection
 		// so we're just testing that the methods exist and can be called
 	})

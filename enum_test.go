@@ -155,7 +155,7 @@ func TestEnumCreatePostgreSQL(t *testing.T) {
 	assert.Contains(t, constraintDef, "inactive", "Constraint should contain 'inactive'")
 	assert.Contains(t, constraintDef, "deleted", "Constraint should contain 'deleted'")
 	// Check for NULL handling - CockroachDB may format this differently
-	assert.True(t, strings.Contains(constraintDef, "IS NULL") || strings.Contains(constraintDef, "NULL"), 
+	assert.True(t, strings.Contains(constraintDef, "IS NULL") || strings.Contains(constraintDef, "NULL"),
 		"Constraint should handle NULL values")
 
 	// Fetch the object back
