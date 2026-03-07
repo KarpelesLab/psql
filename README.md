@@ -5,259 +5,165 @@
 
 # psql
 
-Platform SQL code, including object load/save & query builder.
+Platform SQL library for Go with object binding, query builder, hooks, associations, and vector support. Works with MySQL, PostgreSQL, CockroachDB, and SQLite.
 
-This works in some ways similar to `gorm` but with focus on supporting and using modern Go syntax & features.
+Similar to GORM but focused on modern Go features (generics, 1.23 iterators) and a lighter footprint.
 
-## Object binding
-
-After defining a structure, you can use it to load/save data from database.
+## Quick Start
 
 ```go
-type Table1 struct {
-    Key uint64 `sql:",key=PRIMARY"`
-    Name string `sql:"Name,type=VARCHAR,size=64"`
+import "github.com/KarpelesLab/psql"
+
+// Connect (engine auto-detected from DSN)
+be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")
+ctx := be.Plug(context.Background())
+
+// Define a table
+type User struct {
+    psql.Name `sql:"users"`
+    ID        uint64 `sql:",key=PRIMARY"`
+    Name      string `sql:",type=VARCHAR,size=128"`
+    Email     string `sql:",type=VARCHAR,size=255"`
 }
 
-// ...
+// CRUD operations
+err = psql.Insert(ctx, &User{ID: 1, Name: "Alice", Email: "alice@example.com"})
 
-obj, err := psql.Get[Table1](context.Background(), map[string]any{"Key": 42}) // this fetches entry with Key=42
+user, err := psql.Get[User](ctx, map[string]any{"ID": uint64(1)})
+
+user.Name = "Alice Smith"
+err = psql.Update(ctx, user)
+
+users, err := psql.Fetch[User](ctx, map[string]any{"Name": "Alice Smith"})
 ```
 
-### Enum Support
+## Features
 
-The library supports SQL ENUM types with different implementations for MySQL and PostgreSQL:
+### Multi-Engine Support
+
+Auto-detected from DSN format:
 
 ```go
-type StatusEnum string
+be, _ := psql.New("postgresql://...")        // PostgreSQL / CockroachDB
+be, _ := psql.New("user:pass@tcp(...)/db")   // MySQL
+be, _ := psql.New(":memory:")                // SQLite
+```
 
-const (
-    StatusPending  StatusEnum = "pending"
-    StatusActive   StatusEnum = "active"
-    StatusInactive StatusEnum = "inactive"
-)
+### Hooks
 
-type MyTable struct {
-    ID     uint64     `sql:",key=PRIMARY"`
-    Status StatusEnum `sql:",type=enum,values=pending,active,inactive"`
+Lifecycle callbacks via Go interfaces:
+
+```go
+func (u *User) BeforeInsert(ctx context.Context) error {
+    u.CreatedAt = time.Now()
+    return nil
+}
+
+func (u *User) BeforeSave(ctx context.Context) error {
+    if !strings.Contains(u.Email, "@") {
+        return errors.New("invalid email")
+    }
+    return nil
 }
 ```
 
-In MySQL, this creates a standard ENUM column.
+Available hooks: `BeforeSave`, `AfterSave`, `BeforeInsert`, `AfterInsert`, `BeforeUpdate`, `AfterUpdate`, `AfterScan`.
 
-In PostgreSQL, this creates a custom type named according to the `EnumTypeName` method of the configured Namer (default: `enum_tablename_columnname`) and automatically handles type creation and column mapping.
+### Associations
 
-## go 1.23
-
-New go 1.23 iterators can be used
+Declare relationships and batch-preload to avoid N+1 queries:
 
 ```go
-res, err := psql.Iter[Table1](context.Background(), map[string]any{"Type": "A"}) // this fetches entries with Type=A
-if err != nil {
-    return err
+type Book struct {
+    psql.Name `sql:"books"`
+    ID        int64   `sql:",key=PRIMARY"`
+    AuthorID  int64   `sql:",type=BIGINT"`
+    Title     string  `sql:",type=VARCHAR,size=256"`
+    Author    *Author `psql:"belongs_to:AuthorID"`
 }
-for v := range res {
-    // v is of type *Table1
+
+// Fetch books with authors preloaded (2 queries, not N+1)
+books, err := psql.Fetch[Book](ctx, nil, psql.WithPreload("Author"))
+```
+
+Supports `belongs_to`, `has_one`, and `has_many`.
+
+### Iterators (Go 1.23+)
+
+```go
+iter, err := psql.Iter[User](ctx, map[string]any{"Status": "active"})
+for user := range iter {
+    fmt.Println(user.Name)
 }
 ```
 
-## Query builder
-
-The query builder provides a fluent interface for constructing SQL queries programmatically. It supports SELECT, INSERT, UPDATE, DELETE, and REPLACE operations with full support for WHERE clauses, JOINs, ORDER BY, LIMIT, and more.
-
-### Basic Usage
-
-Start building a query with `psql.B()`:
+### Transactions
 
 ```go
-// Simple SELECT
-query := psql.B().Select("name", "email").From("users")
-
-// SELECT with WHERE clause
-query := psql.B().Select().From("users").Where(map[string]any{"status": "active"})
-
-// UPDATE
-query := psql.B().Update("users").Set(map[string]any{"status": "inactive"}).Where(map[string]any{"id": 123})
-
-// DELETE
-query := psql.B().Delete().From("users").Where(map[string]any{"id": 123})
-```
-
-### Helper Functions
-
-The library provides helper functions for working with SQL identifiers and values:
-
-- `psql.F("field")` - Field reference (column name)
-- `psql.V("value")` - Value literal
-- `psql.S("field", "ASC")` - Sort field with direction
-- `psql.Raw("SQL")` - Raw SQL injection (use carefully)
-
-### WHERE Conditions
-
-The query builder supports various WHERE condition operators:
-
-```go
-// Equality
-query := psql.B().Select().From("users").Where(map[string]any{"id": 123})
-
-// Using comparison operators
-query := psql.B().Select().From("users").Where(psql.Gte(psql.F("age"), 18))
-
-// LIKE operator
-query := psql.B().Select().From("users").Where(&psql.Like{psql.F("name"), "John%"})
-
-// IS NULL / IS NOT NULL
-query := psql.B().Select().From("users").Where(map[string]any{"deleted_at": nil})
-
-// Complex conditions with OR
-query := psql.B().Select().From("users").Where(map[string]any{
-    "status": psql.WhereOR{"active", "pending"},
+err := psql.Tx(ctx, func(ctx context.Context) error {
+    psql.Insert(ctx, &user)
+    psql.Insert(ctx, &profile)
+    return nil // commit; return error to rollback
 })
-
-// Multiple conditions (AND)
-query := psql.B().Select().From("users").Where(
-    psql.Equal(psql.F("status"), "active"),
-    psql.Gte(psql.F("age"), 18),
-)
 ```
 
-### Comparison Operators
+Supports nested transactions via savepoints.
 
-Available comparison functions:
-- `psql.Equal(field, value)` - Equality (=)
-- `psql.Lt(field, value)` - Less than (<)
-- `psql.Lte(field, value)` - Less than or equal (<=)
-- `psql.Gt(field, value)` - Greater than (>)
-- `psql.Gte(field, value)` - Greater than or equal (>=)
-- `psql.Between(field, start, end)` - BETWEEN (inclusive range)
-- `&psql.Not{V: value}` - Negate a condition (IS NOT NULL, !=, NOT LIKE, etc.)
-- `psql.WhereOR{value1, value2, ...}` - OR conditions for the same field
-
-### Advanced Features
-
-#### ORDER BY and LIMIT
+### Vector Similarity Search
 
 ```go
-query := psql.B().Select().From("users").
-    OrderBy(psql.S("created_at", "DESC"), psql.S("name", "ASC")).
-    Limit(10, 20) // limit 10, offset 20
-// Renders as "LIMIT 10, 20" for MySQL
-// Renders as "LIMIT 10 OFFSET 20" for PostgreSQL
+type Item struct {
+    psql.Name `sql:"items"`
+    ID        uint64      `sql:",key=PRIMARY"`
+    Embedding psql.Vector `sql:",type=VECTOR,size=384"`
+}
+
+// Nearest neighbor search
+query := psql.B().Select("*").From("items").
+    OrderBy(psql.VecCosineDistance(psql.F("Embedding"), queryVec)).
+    Limit(10)
 ```
 
-#### Raw SQL
-
-For complex queries, you can inject raw SQL:
+### Query Builder
 
 ```go
-query := psql.B().Select(psql.Raw("COUNT(DISTINCT user_id)")).From("orders")
-```
-
-#### DISTINCT
-
-```go
-query := psql.B().Select("name").From("users").SetDistinct()
-// SELECT DISTINCT "name" FROM "users"
-```
-
-#### JOINs
-
-```go
-// INNER JOIN
 query := psql.B().
-    Select(psql.F("users", "name"), psql.F("orders", "total")).
-    From("users").
-    InnerJoin("orders", psql.Equal(psql.F("users.id"), psql.F("orders.user_id")))
-
-// LEFT JOIN
-query := psql.B().
-    Select().From("users").
-    LeftJoin("profiles", psql.Equal(psql.F("users.id"), psql.F("profiles.user_id")))
-
-// RIGHT JOIN
-query := psql.B().
-    Select().From("users").
-    RightJoin("orders", psql.Equal(psql.F("users.id"), psql.F("orders.user_id")))
-```
-
-#### GROUP BY and HAVING
-
-```go
-// GROUP BY
-query := psql.B().
-    Select("status", psql.Raw("COUNT(*)")).
-    From("users").
-    GroupByFields("status")
-
-// GROUP BY with HAVING
-query := psql.B().
-    Select("status", psql.Raw("COUNT(*) as cnt")).
-    From("users").
-    GroupByFields("status").
-    Having(psql.Gt(psql.Raw("COUNT(*)"), 5))
-```
-
-#### Aggregate Functions
-
-```go
-// COUNT
-query := psql.B().Select(psql.Raw("COUNT(*)")).From("users")
-```
-
-### Executing Queries
-
-The query builder provides several methods to execute the built query:
-
-```go
-// Get the SQL string
-sql, err := query.Render(ctx)
-
-// Get SQL with placeholders and arguments (for prepared statements)
-sql, args, err := query.RenderArgs(ctx)
-
-// Execute a query that returns rows (SELECT)
-rows, err := query.RunQuery(ctx)
-defer rows.Close()
-
-// Execute a query that doesn't return rows (INSERT, UPDATE, DELETE)
-result, err := query.ExecQuery(ctx)
-
-// Prepare a statement for repeated execution
-stmt, err := query.Prepare(ctx)
-defer stmt.Close()
-```
-
-### Complete Examples
-
-```go
-// Find active users older than 18, ordered by name
-users := psql.B().
-    Select("id", "name", "email").
+    Select("id", "name").
     From("users").
     Where(
         psql.Equal(psql.F("status"), "active"),
-        psql.Gt(psql.F("age"), 18),
+        psql.Gte(psql.F("age"), 18),
     ).
     OrderBy(psql.S("name", "ASC")).
     Limit(50)
 
-// Update user's last login time
-update := psql.B().
-    Update("users").
-    Set(map[string]any{
-        "last_login": time.Now(),
-        "login_count": psql.Raw("login_count + 1"),
-    }).
-    Where(map[string]any{"id": userID})
-
-// Complex search with LIKE and OR conditions
-search := psql.B().
-    Select().
-    From("products").
-    Where(map[string]any{
-        "status": "available",
-        "name": &psql.Like{psql.F("name"), "%" + searchTerm + "%"},
-        "category_id": psql.WhereOR{1, 2, 3},
-    }).
-    OrderBy(psql.S("price", "ASC"))
+rows, err := query.RunQuery(ctx)
 ```
+
+### Enum Support
+
+```go
+type StatusEnum string
+const (
+    StatusActive   StatusEnum = "active"
+    StatusInactive StatusEnum = "inactive"
+)
+
+type Account struct {
+    ID     uint64     `sql:",key=PRIMARY"`
+    Status StatusEnum `sql:",type=enum,values=active,inactive"`
+}
+```
+
+## Documentation
+
+| Topic | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Installation, connecting, basic CRUD |
+| [Object Binding](docs/object-binding.md) | Struct tags, column types, keys, enums, custom types |
+| [Hooks](docs/hooks.md) | Lifecycle callbacks, execution order, validation |
+| [Associations](docs/associations.md) | belongs_to, has_one, has_many, preloading |
+| [Query Builder](docs/query-builder.md) | SELECT, WHERE, JOIN, GROUP BY, raw SQL |
+| [Transactions](docs/transactions.md) | Transactions, nested savepoints, safe deletion |
+| [Vectors](docs/vectors.md) | Vector columns, similarity search, distance functions |
+| [Naming Strategies](docs/naming-strategies.md) | DefaultNamer, CamelSnakeNamer, LegacyNamer |
