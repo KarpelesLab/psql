@@ -148,18 +148,25 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 	}
 
 	for keyName := range existingKeys {
-		k, ok := keys[keyName]
-		if !ok {
-			// Check if this is the auto-generated primary key name (tablename_pkey)
-			if keyName == tableName+"_pkey" {
-				delete(keys, "PRIMARY")
-			} else {
-				slog.Warn(fmt.Sprintf("[psql:check] key %s.%s missing in structure", t.table, keyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", keyName)
-			}
+		// Try direct match first (for keys using raw names)
+		if _, ok := keys[keyName]; ok {
+			delete(keys, keyName)
 			continue
 		}
-		delete(keys, keyName)
-		_ = k // key exists, for now assume it matches
+		// Check if this is the auto-generated primary key name (tablename_pkey)
+		if keyName == tableName+"_pkey" {
+			delete(keys, "PRIMARY")
+			continue
+		}
+		// Check if this matches a table-prefixed key name (tablename_keyname)
+		if strings.HasPrefix(keyName, tableName+"_") {
+			rawName := strings.TrimPrefix(keyName, tableName+"_")
+			if _, ok := keys[rawName]; ok {
+				delete(keys, rawName)
+				continue
+			}
+		}
+		slog.Warn(fmt.Sprintf("[psql:check] key %s.%s missing in structure", t.table, keyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", keyName)
 	}
 
 	// Create missing keys
@@ -241,7 +248,7 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 		}
 		if k.typ == keyPrimary || k.typ == keyUnique {
 			sb.WriteString(", ")
-			sb.WriteString(k.defStringPG(be))
+			sb.WriteString(k.defStringPG(tableName))
 		}
 	}
 

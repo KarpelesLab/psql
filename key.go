@@ -132,9 +132,15 @@ func (k *structKey) defString(be *Backend) string {
 	return s.String()
 }
 
+// pgKeyName returns a PostgreSQL-compatible key name that is unique within the schema.
+// PostgreSQL index names are schema-scoped (not table-scoped), so we prefix with the table name.
+func (k *structKey) pgKeyName(tableName string) string {
+	return tableName + "_" + k.key
+}
+
 // defStringPG generates the inline constraint definition for PostgreSQL CREATE TABLE.
 // Only PRIMARY KEY and UNIQUE constraints can appear inline in PostgreSQL.
-func (k *structKey) defStringPG(be *Backend) string {
+func (k *structKey) defStringPG(tableName string) string {
 	s := &strings.Builder{}
 
 	switch k.typ {
@@ -142,7 +148,7 @@ func (k *structKey) defStringPG(be *Backend) string {
 		s.WriteString("PRIMARY KEY ")
 	case keyUnique:
 		s.WriteString("CONSTRAINT ")
-		s.WriteString(QuoteName(k.key))
+		s.WriteString(QuoteName(k.pgKeyName(tableName)))
 		s.WriteString(" UNIQUE ")
 	default:
 		return "" // non-inline indexes handled separately
@@ -169,10 +175,10 @@ func (k *structKey) createIndexPG(tableName string) string {
 		return ""
 	case keyUnique:
 		s.WriteString("CREATE UNIQUE INDEX ")
-		s.WriteString(QuoteName(k.key))
+		s.WriteString(QuoteName(k.pgKeyName(tableName)))
 	case keyIndex:
 		s.WriteString("CREATE INDEX ")
-		s.WriteString(QuoteName(k.key))
+		s.WriteString(QuoteName(k.pgKeyName(tableName)))
 	default:
 		// FULLTEXT and SPATIAL not supported in PostgreSQL, skip
 		return ""
