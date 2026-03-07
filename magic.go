@@ -11,6 +11,10 @@ var magicEngineTypes = map[Engine]map[string]string{
 		"DATETIME": "type=TIMESTAMP,size=6,default='1970-01-01 00:00:00.000000'",
 		"JSON":     "type=JSONB,format=json",
 	},
+	EngineSQLite: map[string]string{
+		"DATETIME": "type=TEXT",
+		"JSON":     "type=TEXT,format=json",
+	},
 }
 
 // quickhand types that can be imported easily, for example via `sql:",import=UUID"`

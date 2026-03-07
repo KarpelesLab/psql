@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24', '1.25', '1.26']
+        go-version: ['1.24', '1.25', '1.26']
 
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24', '1.25', '1.26']
+        go-version: ['1.24', '1.25', '1.26']
 
     services:
       postgres:
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24', '1.25', '1.26']
+        go-version: ['1.24', '1.25', '1.26']
 
     services:
       mysql:
@@ -152,9 +152,44 @@ jobs:
           flag-name: mysql
           parallel: true
 
+  test-sqlite:
+    name: Test (SQLite, Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.24', '1.25', '1.26']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        env:
+          PSQL_TEST_DSN: ":memory:"
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Coveralls
+        if: matrix.go-version == '1.26'
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage.out
+          format: golang
+          flag-name: sqlite
+          parallel: true
+
   coverage-finish:
     name: Finish Coveralls
-    needs: [test-cockroach, test-postgres, test-mysql]
+    needs: [test-cockroach, test-postgres, test-mysql, test-sqlite]
     if: always()
     runs-on: ubuntu-latest
     steps:

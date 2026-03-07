@@ -50,7 +50,7 @@ func (ctx *renderContext) appendArg(arg any) string {
 		switch ctx.e {
 		case EnginePostgreSQL:
 			return "$" + strconv.FormatUint(uint64(len(ctx.args)), 10)
-		default:
+		default: // MySQL, SQLite both use ?
 			return "?"
 		}
 	}

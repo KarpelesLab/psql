@@ -6,6 +6,7 @@ const (
 	EngineUnknown Engine = iota
 	EngineMySQL
 	EnginePostgreSQL
+	EngineSQLite
 )
 
 func (e Engine) String() string {
@@ -14,6 +15,8 @@ func (e Engine) String() string {
 		return "MySQL Engine"
 	case EnginePostgreSQL:
 		return "PostgreSQL Engine"
+	case EngineSQLite:
+		return "SQLite Engine"
 	default:
 		return "Unknown Engine"
 	}

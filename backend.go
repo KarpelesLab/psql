@@ -13,6 +13,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	_ "modernc.org/sqlite"
 )
 
 type Backend struct {
@@ -32,6 +33,9 @@ func New(dsn string) (*Backend, error) {
 			return nil, err
 		}
 		return NewPG(cfg)
+	}
+	if strings.HasPrefix(dsn, "sqlite:") || strings.HasPrefix(dsn, "file:") || strings.HasSuffix(dsn, ".db") || strings.HasSuffix(dsn, ".sqlite") || strings.HasSuffix(dsn, ".sqlite3") || dsn == ":memory:" {
+		return NewSQLite(strings.TrimPrefix(dsn, "sqlite:"))
 	}
 	cfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
@@ -94,6 +98,34 @@ func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 	b.db.SetConnMaxLifetime(time.Minute * 3)
 	b.db.SetMaxOpenConns(128)
 	b.db.SetMaxIdleConns(32)
+
+	return b, nil
+}
+
+func NewSQLite(dsn string) (*Backend, error) {
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite connection failed: %w", err)
+	}
+
+	// SQLite doesn't handle concurrent writes well, limit to 1 open connection
+	db.SetMaxOpenConns(1)
+	db.SetConnMaxLifetime(0)
+
+	// Enable WAL mode and foreign keys
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		slog.Warn(fmt.Sprintf("[sqlite] failed to enable WAL mode: %s", err), "event", "psql:init:sqlite_wal")
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		slog.Warn(fmt.Sprintf("[sqlite] failed to enable foreign keys: %s", err), "event", "psql:init:sqlite_fk")
+	}
+
+	b := &Backend{
+		db:      db,
+		engine:  EngineSQLite,
+		checked: make(map[reflect.Type]bool),
+		namer:   &LegacyNamer{},
+	}
 
 	return b, nil
 }

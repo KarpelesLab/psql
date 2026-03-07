@@ -82,9 +82,9 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 			first = false
 			req += QuoteName(f.column) + "=EXCLUDED." + QuoteName(f.column)
 		}
-	case EngineMySQL:
-		fallthrough
-	default:
+	case EngineSQLite:
+		req = "INSERT OR REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	default: // MySQL
 		req = "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	}
 

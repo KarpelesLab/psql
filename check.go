@@ -29,6 +29,11 @@ func (t *TableMeta[T]) check(ctx context.Context) {
 			log.Printf("err = %s", err)
 			slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", t.table, err), "event", "psql:table:check_error", "psql.table", t.table)
 		}
+	case EngineSQLite:
+		err := t.checkStructureSQLite(ctx, be)
+		if err != nil {
+			slog.ErrorContext(ctx, fmt.Sprintf("psql: failed to check table %s: %s", t.table, err), "event", "psql:table:check_error", "psql.table", t.table)
+		}
 	}
 }
 

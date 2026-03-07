@@ -132,6 +132,10 @@ func float64Setter(v reflect.Value, from sql.RawBytes) error {
 
 func timeSetter(v reflect.Value, from sql.RawBytes) error {
 	// parse date
+	if len(from) == 0 {
+		v.Set(reflect.ValueOf(time.Time{}))
+		return nil
+	}
 	// RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 	if bytes.IndexByte(from, 'T') != -1 {
 		// this is a RFC3339 date

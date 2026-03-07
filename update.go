@@ -93,11 +93,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			}
 			switch engine {
 			case EnginePostgreSQL:
-				// need to add $1, $2, $3, ...
 				req += QuoteName(k) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
-			case EngineMySQL:
-				fallthrough
-			default:
+			default: // MySQL, SQLite both use ?
 				req += QuoteName(k) + " = ?"
 			}
 			flds = append(flds, engine.export(v.v, v.f))
@@ -114,11 +111,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 
 			switch engine {
 			case EnginePostgreSQL:
-				// need to add $1, $2, $3, ...
 				req += QuoteName(col) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
-			case EngineMySQL:
-				fallthrough
-			default:
+			default: // MySQL, SQLite both use ?
 				req += QuoteName(col) + " = ?"
 			}
 			flds = append(flds, engine.export(val.Field(t.fldcol[col].index).Interface(), t.fldcol[col]))

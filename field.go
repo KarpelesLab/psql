@@ -81,6 +81,10 @@ func (f *structField) sqlType(be *Backend) string {
 
 	switch mytyp {
 	case "enum", "set":
+		if be.Engine() == EngineSQLite {
+			// SQLite doesn't have enum or set types, use TEXT
+			return "text"
+		}
 		if be.Engine() == EnginePostgreSQL {
 			switch mytyp {
 			case "enum":
@@ -108,12 +112,20 @@ func (f *structField) sqlType(be *Backend) string {
 			return ""
 		}
 	case "vector":
+		if be.Engine() == EngineSQLite {
+			// SQLite doesn't have a vector type, use TEXT
+			return "text"
+		}
 		// Vector type: VECTOR(dimensions)
 		if mysize, ok := attrs["size"]; ok {
 			return "vector(" + mysize + ")"
 		}
 		return "vector"
 	default:
+		if be.Engine() == EngineSQLite {
+			// SQLite uses type affinity — strip sizes from types
+			return sqliteTypeAffinity(mytyp)
+		}
 		if be.Engine() == EnginePostgreSQL {
 			// pgsql requires int types to have no length
 			if x, ok := numericTypes[mytyp]; ok && x {
@@ -152,6 +164,26 @@ func (f *structField) sqlType(be *Backend) string {
 	      [check_constraint_definition]
 	}
 */
+// sqliteTypeAffinity maps SQL types to SQLite type affinity names.
+// SQLite doesn't use sizes, so we strip them and map to the 5 storage classes.
+func sqliteTypeAffinity(typ string) string {
+	typ = strings.ToLower(typ)
+	switch typ {
+	case "tinyint", "smallint", "mediumint", "int", "integer", "bigint", "boolean", "bool":
+		return "integer"
+	case "float", "double", "real", "double precision", "numeric", "decimal":
+		return "real"
+	case "blob", "binary", "varbinary", "longblob", "mediumblob", "tinyblob":
+		return "blob"
+	case "char", "varchar", "text", "longtext", "mediumtext", "tinytext",
+		"timestamp", "datetime", "date", "time",
+		"jsonb", "json", "uuid", "xml", "cidr", "inet":
+		return "text"
+	default:
+		return "text"
+	}
+}
+
 func (f *structField) defString(be *Backend) string {
 	attrs := f.getAttrs(be)
 	mytyp := f.sqlType(be)
@@ -203,7 +235,10 @@ func (f *structField) defString(be *Backend) string {
 	}
 
 	if mycol, ok := attrs["collation"]; ok {
-		mydef += " COLLATE " + mycol
+		if be.Engine() != EngineSQLite {
+			// SQLite only supports BINARY, NOCASE, RTRIM collations
+			mydef += " COLLATE " + mycol
+		}
 	}
 
 	return mydef

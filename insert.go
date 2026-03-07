@@ -50,9 +50,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 			}
 			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
 		}
-	case EngineMySQL:
-		fallthrough
-	default:
+	default: // MySQL, SQLite both use ?
 		req += strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",")
 	}
 	req += ")"
@@ -121,9 +119,9 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
 		}
 		req += ") ON CONFLICT DO NOTHING"
-	case EngineMySQL:
-		fallthrough
-	default:
+	case EngineSQLite:
+		req = "INSERT OR IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	default: // MySQL
 		req += "IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
 	}
 

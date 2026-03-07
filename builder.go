@@ -366,8 +366,8 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 	case 1:
 		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
 	case 2:
-		// PostgreSQL uses LIMIT x OFFSET y, MySQL uses LIMIT x, y
-		if ctx.e == EnginePostgreSQL {
+		// PostgreSQL and SQLite use LIMIT x OFFSET y, MySQL uses LIMIT x, y
+		if ctx.e == EnginePostgreSQL || ctx.e == EngineSQLite {
 			ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
 			ctx.append("OFFSET", strconv.Itoa(q.LimitData[1]))
 		} else {

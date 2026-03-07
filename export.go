@@ -19,9 +19,14 @@ func (e Engine) export(in any, f *structField) any {
 			switch e {
 			case EnginePostgreSQL:
 				return "0001-01-01 00:00:00.000000"
+			case EngineSQLite:
+				return "0001-01-01T00:00:00.000000Z"
 			default:
 				return "0000-00-00 00:00:00.000000"
 			}
+		}
+		if e == EngineSQLite {
+			return v.UTC().Format(time.RFC3339Nano)
 		}
 		return v.UTC().Format("2006-01-02 15:04:05.999999")
 	case *time.Time:

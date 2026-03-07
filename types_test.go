@@ -10,6 +10,7 @@ import (
 func TestEngineString(t *testing.T) {
 	assert.Equal(t, "MySQL Engine", psql.EngineMySQL.String())
 	assert.Equal(t, "PostgreSQL Engine", psql.EnginePostgreSQL.String())
+	assert.Equal(t, "SQLite Engine", psql.EngineSQLite.String())
 	assert.Equal(t, "Unknown Engine", psql.EngineUnknown.String())
 }
 
