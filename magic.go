@@ -3,15 +3,15 @@ package psql
 import "fmt"
 
 var magicEngineTypes = map[Engine]map[string]string{
-	EngineMySQL: map[string]string{
+	EngineMySQL: {
 		"DATETIME": "type=DATETIME,size=6",
 		"JSON":     "type=LONGTEXT,format=json",
 	},
-	EnginePostgreSQL: map[string]string{
+	EnginePostgreSQL: {
 		"DATETIME": "type=TIMESTAMP,size=6,default='1970-01-01 00:00:00.000000'",
 		"JSON":     "type=JSONB,format=json",
 	},
-	EngineSQLite: map[string]string{
+	EngineSQLite: {
 		"DATETIME": "type=TEXT",
 		"JSON":     "type=TEXT,format=json",
 	},
