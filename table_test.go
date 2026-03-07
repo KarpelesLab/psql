@@ -25,24 +25,8 @@ type TestTable1b struct {
 	StatusKey psql.Key `sql:",fields=Status"`
 }
 
-func TestTableMySQL(t *testing.T) {
-	//psql.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	backend, err := psql.New("/test")
-	if err != nil {
-		t.Skipf("Failed to connect to local MySQL: %s", err)
-		return
-	}
-
-	performSQLTest(backend.Plug(context.Background()), t)
-}
-
-func TestTableCockroach(t *testing.T) {
-	backend, err := psql.LocalTestServer()
-	if err != nil {
-		t.Skipf("failed to start local cockroach server: %s", err)
-		return
-	}
-
+func TestTable(t *testing.T) {
+	backend := getTestBackend(t)
 	performSQLTest(backend.Plug(context.Background()), t)
 }
 

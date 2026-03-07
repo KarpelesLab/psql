@@ -99,16 +99,9 @@ func TestEnumTypeName(t *testing.T) {
 }
 
 func TestEnumCreatePostgreSQL(t *testing.T) {
-	// Skip this test if not running on PostgreSQL
-	be, err := psql.LocalTestServer()
-	if err != nil {
-		t.Skipf("Unable to launch cockroach: %s", err)
-		return
-	}
-
+	be := getTestBackend(t)
 	if be.Engine() != psql.EnginePostgreSQL {
 		t.Skip("Test only applicable for PostgreSQL")
-		return
 	}
 
 	ctx := be.Plug(context.Background())
@@ -121,7 +114,7 @@ func TestEnumCreatePostgreSQL(t *testing.T) {
 	}
 
 	// Insert the object (which should create the enum type and table)
-	err = psql.Insert(ctx, obj)
+	err := psql.Insert(ctx, obj)
 	require.NoError(t, err, "Failed to insert object with enum field")
 
 	// Check if the CHECK constraint was created
@@ -174,16 +167,9 @@ func TestEnumCreatePostgreSQL(t *testing.T) {
 }
 
 func TestEnumUpdatePostgreSQL(t *testing.T) {
-	// Skip this test if not running on PostgreSQL
-	be, err := psql.LocalTestServer()
-	if err != nil {
-		t.Skipf("Unable to launch cockroach: %s", err)
-		return
-	}
-
+	be := getTestBackend(t)
 	if be.Engine() != psql.EnginePostgreSQL {
 		t.Skip("Test only applicable for PostgreSQL")
-		return
 	}
 
 	ctx := be.Plug(context.Background())
@@ -199,7 +185,7 @@ func TestEnumUpdatePostgreSQL(t *testing.T) {
 	}
 
 	// Insert the object (which should create the enum type and table)
-	err = psql.Insert(ctx, obj)
+	err := psql.Insert(ctx, obj)
 	require.NoError(t, err, "Failed to insert object with enum field")
 
 	// Now try to update the enum by using a struct with updated enum values

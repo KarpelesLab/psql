@@ -32,15 +32,9 @@ func TestBuilderLimitSyntax(t *testing.T) {
 
 	t.Run("PostgreSQL LIMIT syntax", func(t *testing.T) {
 		// Skip if we can't get a PostgreSQL backend
-		be, err := psql.LocalTestServer()
-		if err != nil {
-			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
-			return
-		}
-
+		be := getTestBackend(t)
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
-			return
 		}
 
 		ctx := be.Plug(context.Background())
@@ -60,15 +54,9 @@ func TestBuilderLimitSyntax(t *testing.T) {
 
 	t.Run("Complex query with LIMIT", func(t *testing.T) {
 		// Test for PostgreSQL
-		be, err := psql.LocalTestServer()
-		if err != nil {
-			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
-			return
-		}
-
+		be := getTestBackend(t)
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
-			return
 		}
 
 		ctx := be.Plug(context.Background())
@@ -89,15 +77,9 @@ func TestBuilderLimitSyntax(t *testing.T) {
 
 	t.Run("RenderArgs with LIMIT", func(t *testing.T) {
 		// Test that argument rendering also respects the engine
-		be, err := psql.LocalTestServer()
-		if err != nil {
-			t.Skipf("Unable to launch PostgreSQL test server: %s", err)
-			return
-		}
-
+		be := getTestBackend(t)
 		if be.Engine() != psql.EnginePostgreSQL {
 			t.Skip("Test only applicable for PostgreSQL")
-			return
 		}
 
 		ctx := be.Plug(context.Background())
