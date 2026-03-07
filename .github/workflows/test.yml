@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24']
+        go-version: ['1.23', '1.24', '1.25', '1.26']
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage to Coveralls
-        if: matrix.go-version == '1.24'
+        if: matrix.go-version == '1.26'
         uses: coverallsapp/github-action@v2
         with:
           file: coverage.out
