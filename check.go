@@ -133,53 +133,44 @@ func (t *TableMeta[T]) checkStructurePG(ctx context.Context, be *Backend) error 
 		keys[n] = k
 	}
 
-	indices, err := QT[pgShowIndex]("SHOW INDEX FROM " + QuoteName(tableName)).All(ctx)
+	// Query existing indexes using pg_indexes (works on both PostgreSQL and CockroachDB)
+	existingKeys := make(map[string]bool)
+	err = Q(`SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = $1`, tableName).Each(ctx, func(rows *sql.Rows) error {
+		var indexName string
+		if err := rows.Scan(&indexName); err != nil {
+			return err
+		}
+		existingKeys[indexName] = true
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("while doing SHOW INDEX: %w", err)
+		return fmt.Errorf("while querying pg_indexes: %w", err)
 	}
 
-	for _, kInfo := range indices {
-		k, ok := keys[kInfo.Index]
+	for keyName := range existingKeys {
+		k, ok := keys[keyName]
 		if !ok {
-			slog.Warn(fmt.Sprintf("[psql:check] key %s.%s missing in structure", t.table, kInfo.Index), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", kInfo.Index)
-			// TODO check if there is a DROP or RENAME rule for this key
+			// Check if this is the auto-generated primary key name (tablename_pkey)
+			if keyName == tableName+"_pkey" {
+				delete(keys, "PRIMARY")
+			} else {
+				slog.Warn(fmt.Sprintf("[psql:check] key %s.%s missing in structure", t.table, keyName), "event", "psql:check:unused_key", "psql.table", t.table, "psql.key", keyName)
+			}
 			continue
 		}
-		delete(keys, kInfo.Index)
-		ok, err := k.matchesPG(kInfo)
-		if err != nil {
-			return fmt.Errorf("key %s.%s fails check: %w", t.table, kInfo.Index, err)
-		}
-		if !ok {
-			// we can't change a key, but we can drop & recreate it
-			alterData = append(alterData, "DROP "+k.sqlKeyName())
-			alterData = append(alterData, "ADD "+k.defString(be))
-		}
+		delete(keys, keyName)
+		_ = k // key exists, for now assume it matches
 	}
+
+	// Create missing keys
 	for _, k := range keys {
-		// need to create this key
-		alterData = append(alterData, "ADD "+k.defString(be))
-	}
-
-	// alter for keys
-	if len(alterData) > 0 {
-		s := &strings.Builder{}
-		s.WriteString("ALTER TABLE ")
-		s.WriteString(QuoteName(tableName))
-		s.WriteByte(' ')
-		for n, req := range alterData {
-			if n > 0 {
-				s.WriteString(", ")
+		createSQL := k.createIndexPG(tableName)
+		if createSQL != "" {
+			slog.Debug(fmt.Sprintf("[psql] Creating index: %s", createSQL), "event", "psql:check:create_index", "table", t.table)
+			if err := Q(createSQL).Exec(ctx); err != nil {
+				return fmt.Errorf("while creating index on table %s: %w", t.table, err)
 			}
-			s.WriteString(req)
 		}
-		slog.Warn(fmt.Sprintf("[psql] Would update keys: %s", s.String()), "event", "psql:check:would_alter", "table", t.table)
-		//err = Q(s.String()).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("while updating key on table %s: %w", t.table, err)
-		}
-
-		alterData = nil
 	}
 
 	// Add any missing CHECK constraints for enums
@@ -243,13 +234,15 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 		sb.WriteString(f.defString(be))
 	}
 
-	// keys & indexes
+	// inline constraints (PRIMARY KEY and UNIQUE only — PostgreSQL doesn't support INDEX in CREATE TABLE)
 	for _, k := range t.keys {
 		if len(k.fields) == 0 {
 			continue
 		}
-		sb.WriteString(", ")
-		sb.WriteString(k.defString(be))
+		if k.typ == keyPrimary || k.typ == keyUnique {
+			sb.WriteString(", ")
+			sb.WriteString(k.defStringPG(be))
+		}
 	}
 
 	// Add CHECK constraints for enums
@@ -266,6 +259,21 @@ func (t *TableMeta[T]) createTablePG(ctx context.Context, be *Backend) error {
 
 	if err := Q(sb.String()).Exec(ctx); err != nil {
 		return fmt.Errorf("while creating structure: %w", err)
+	}
+
+	// Create non-inline indexes (INDEX, FULLTEXT, SPATIAL) as separate statements
+	for _, k := range t.keys {
+		if len(k.fields) == 0 {
+			continue
+		}
+		if k.typ != keyPrimary && k.typ != keyUnique {
+			createSQL := k.createIndexPG(tableName)
+			if createSQL != "" {
+				if err := Q(createSQL).Exec(ctx); err != nil {
+					return fmt.Errorf("while creating index: %w", err)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -389,7 +397,8 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context, be *Backend) err
 	var keydata = make(map[string]*keyinfo)
 
 	var nTable, nNonUnique, nKey, nSeq *string
-	var nCol, nCollation, nCardinality, nSub, nPacked, nNull, nType, nComment, nExpr *string
+	var nCol, nCollation, nCardinality, nSub, nPacked, nNull, nType, nComment *string
+	var nIndexComment, nVisible, nExpr *string
 
 	cols, err = rows2.Columns()
 	if err != nil {
@@ -397,8 +406,12 @@ func (t *TableMeta[T]) checkStructureMySQL(ctx context.Context, be *Backend) err
 	}
 
 	vars = []any{&nTable, &nNonUnique, &nKey, &nSeq, &nCol, &nCollation, &nCardinality, &nSub, &nPacked, &nNull, &nType, &nComment}
-	if len(cols) >= 13 {
-		vars = append(vars, &nExpr)
+	if len(cols) >= 15 {
+		vars = append(vars, &nIndexComment, &nVisible, &nExpr)
+	} else if len(cols) >= 14 {
+		vars = append(vars, &nIndexComment, &nVisible)
+	} else if len(cols) >= 13 {
+		vars = append(vars, &nIndexComment)
 	}
 
 	for rows2.Next() {

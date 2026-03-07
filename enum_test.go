@@ -98,13 +98,16 @@ func TestEnumTypeName(t *testing.T) {
 	assert.Equal(t, name1, name2, "Same values should produce the same enum type name")
 }
 
-func TestEnumCreatePostgreSQL(t *testing.T) {
+func TestEnumPostgreSQL(t *testing.T) {
 	be := getTestBackend(t)
 	if be.Engine() != psql.EnginePostgreSQL {
 		t.Skip("Test only applicable for PostgreSQL")
 	}
 
 	ctx := be.Plug(context.Background())
+
+	// Clean up any existing table from previous tests
+	_ = psql.Q("DROP TABLE IF EXISTS \"test_enum\"").Exec(ctx)
 
 	// Create a table with an enum field
 	obj := &TestStructWithEnum{
@@ -134,8 +137,8 @@ func TestEnumCreatePostgreSQL(t *testing.T) {
 	// Check the constraint definition
 	var constraintDef string
 	err = psql.Q(`
-		SELECT pg_get_constraintdef(c.oid) 
-		FROM pg_constraint c 
+		SELECT pg_get_constraintdef(c.oid)
+		FROM pg_constraint c
 		WHERE c.conname = $1
 	`, constraintName).Each(ctx, func(row *sql.Rows) error {
 		return row.Scan(&constraintDef)
@@ -159,77 +162,45 @@ func TestEnumCreatePostgreSQL(t *testing.T) {
 	assert.Equal(t, StatusActive, fetchedObj.Status, "Fetched enum value should match")
 	assert.Equal(t, "Test Object", fetchedObj.Title, "Fetched title should match")
 
-	// Clean up
-	err = psql.Q("DROP TABLE IF EXISTS \"test_enum\"").Exec(ctx)
-	require.NoError(t, err, "Failed to drop test table")
-
-	// The CHECK constraint will be dropped automatically with the table
-}
-
-func TestEnumUpdatePostgreSQL(t *testing.T) {
-	be := getTestBackend(t)
-	if be.Engine() != psql.EnginePostgreSQL {
-		t.Skip("Test only applicable for PostgreSQL")
-	}
-
-	ctx := be.Plug(context.Background())
-
-	// Clean up any existing table from previous tests
-	_ = psql.Q("DROP TABLE IF EXISTS \"test_enum\"").Exec(ctx)
-
-	// First create a table with the original enum
-	obj := &TestStructWithEnum{
-		ID:     1,
-		Status: StatusActive,
-		Title:  "Test Object",
-	}
-
-	// Insert the object (which should create the enum type and table)
-	err := psql.Insert(ctx, obj)
-	require.NoError(t, err, "Failed to insert object with enum field")
-
-	// Now try to update the enum by using a struct with updated enum values
+	// Now test updating the enum by using a struct with additional values
 	obj2 := &TestStructWithEnum2{
 		ID:     2,
 		Status: StatusActive,
 		Title:  "Test Object 2",
 	}
 
-	// This should trigger an update to the enum type
+	// This should trigger an update to the enum type (adding 'archived' to CHECK constraint)
 	err = psql.Insert(ctx, obj2)
 	require.NoError(t, err, "Failed to insert object with updated enum field")
 
 	// Check the new CHECK constraint was created
-	// Generate deduplicated constraint name based on new values hash (using pipe separator)
 	hasher2 := sha256.New()
 	hasher2.Write([]byte("pending|active|inactive|deleted|archived"))
 	hash2 := hex.EncodeToString(hasher2.Sum(nil))
 	constraintName2 := "chk_enum_" + hash2[:8]
 
-	var constraintExists bool
+	var constraintExists2 bool
 	err = psql.Q("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1)", constraintName2).Each(ctx, func(row *sql.Rows) error {
-		return row.Scan(&constraintExists)
+		return row.Scan(&constraintExists2)
 	})
 	require.NoError(t, err, "Failed to check if new CHECK constraint exists")
-	assert.True(t, constraintExists, "New CHECK constraint should exist")
+	assert.True(t, constraintExists2, "New CHECK constraint should exist")
 
 	// Check the constraint definition
-	var constraintDef string
+	var constraintDef2 string
 	err = psql.Q(`
-		SELECT pg_get_constraintdef(c.oid) 
-		FROM pg_constraint c 
+		SELECT pg_get_constraintdef(c.oid)
+		FROM pg_constraint c
 		WHERE c.conname = $1
 	`, constraintName2).Each(ctx, func(row *sql.Rows) error {
-		return row.Scan(&constraintDef)
+		return row.Scan(&constraintDef2)
 	})
 	require.NoError(t, err, "Failed to get constraint definition")
 
 	// Check that the constraint includes the new 'archived' value
-	assert.Contains(t, constraintDef, "archived", "Constraint should contain the new 'archived' value")
+	assert.Contains(t, constraintDef2, "archived", "Constraint should contain the new 'archived' value")
 
 	// Clean up
 	err = psql.Q("DROP TABLE IF EXISTS \"test_enum\"").Exec(ctx)
 	require.NoError(t, err, "Failed to drop test table")
-
-	// The CHECK constraints will be dropped automatically with the table
 }

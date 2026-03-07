@@ -132,6 +132,65 @@ func (k *structKey) defString(be *Backend) string {
 	return s.String()
 }
 
+// defStringPG generates the inline constraint definition for PostgreSQL CREATE TABLE.
+// Only PRIMARY KEY and UNIQUE constraints can appear inline in PostgreSQL.
+func (k *structKey) defStringPG(be *Backend) string {
+	s := &strings.Builder{}
+
+	switch k.typ {
+	case keyPrimary:
+		s.WriteString("PRIMARY KEY ")
+	case keyUnique:
+		s.WriteString("CONSTRAINT ")
+		s.WriteString(QuoteName(k.key))
+		s.WriteString(" UNIQUE ")
+	default:
+		return "" // non-inline indexes handled separately
+	}
+
+	s.WriteByte('(')
+	for n, f := range k.fields {
+		if n > 0 {
+			s.WriteString(", ")
+		}
+		s.WriteString(QuoteName(f))
+	}
+	s.WriteByte(')')
+	return s.String()
+}
+
+// createIndexPG generates a CREATE INDEX statement for PostgreSQL.
+func (k *structKey) createIndexPG(tableName string) string {
+	s := &strings.Builder{}
+
+	switch k.typ {
+	case keyPrimary:
+		// Primary keys are created inline with CREATE TABLE
+		return ""
+	case keyUnique:
+		s.WriteString("CREATE UNIQUE INDEX ")
+		s.WriteString(QuoteName(k.key))
+	case keyIndex:
+		s.WriteString("CREATE INDEX ")
+		s.WriteString(QuoteName(k.key))
+	default:
+		// FULLTEXT and SPATIAL not supported in PostgreSQL, skip
+		return ""
+	}
+
+	s.WriteString(" ON ")
+	s.WriteString(QuoteName(tableName))
+	s.WriteString(" (")
+	for n, f := range k.fields {
+		if n > 0 {
+			s.WriteString(", ")
+		}
+		s.WriteString(QuoteName(f))
+	}
+	s.WriteByte(')')
+	return s.String()
+}
+
 func (k *structKey) isUnique() bool {
 	switch k.typ {
 	case keyPrimary, keyUnique:
