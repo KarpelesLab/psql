@@ -2,8 +2,10 @@ package psql
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -31,20 +33,67 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	t.check(ctx)
 
 	be := GetBackend(ctx)
+	engine := be.Engine()
 
 	// Get the formatted table name (respects explicit names)
 	tableName := t.FormattedName(be)
 
 	// REPLACE QUERY
-	req := "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	var req string
+
+	switch engine {
+	case EnginePostgreSQL:
+		if t.mainKey == nil {
+			return errors.New("cannot use Replace without a primary key on PostgreSQL")
+		}
+		// INSERT INTO ... ON CONFLICT (key) DO UPDATE SET ...
+		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
+		ln := len(t.fields)
+		for i := 0; i < ln; i++ {
+			if i > 0 {
+				req += ","
+			}
+			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
+		}
+		req += ") ON CONFLICT ("
+		for i, col := range t.mainKey.fields {
+			if i > 0 {
+				req += ","
+			}
+			req += QuoteName(col)
+		}
+		req += ") DO UPDATE SET "
+		first := true
+		for _, f := range t.fields {
+			// skip key fields in SET clause
+			isKey := false
+			for _, col := range t.mainKey.fields {
+				if f.column == col {
+					isKey = true
+					break
+				}
+			}
+			if isKey {
+				continue
+			}
+			if !first {
+				req += ","
+			}
+			first = false
+			req += QuoteName(f.column) + "=EXCLUDED." + QuoteName(f.column)
+		}
+	case EngineMySQL:
+		fallthrough
+	default:
+		req = "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	}
+
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:prep_fail", "psql.table", tableName)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
-
-	engine := be.Engine()
 
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()

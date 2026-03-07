@@ -23,7 +23,7 @@ func escapeCtx(ctx *renderContext, val any) string {
 	if ctx != nil && ctx.useArgs {
 		switch v := val.(type) {
 		case *fullField, fieldName, tableName:
-			break // contnue below
+			break // continue below
 		case escapeValueCtxable:
 			return v.escapeValueCtx(ctx)
 		case *rawValue:

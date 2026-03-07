@@ -13,7 +13,7 @@ func (e Engine) String() string {
 	case EngineMySQL:
 		return "MySQL Engine"
 	case EnginePostgreSQL:
-		return "PostreSQL Engine"
+		return "PostgreSQL Engine"
 	default:
 		return "Unknown Engine"
 	}

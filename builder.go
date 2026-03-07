@@ -34,6 +34,7 @@ type QueryBuilder struct {
 	FieldsSet   []any
 	WhereData   WhereAND
 	GroupBy     []any
+	HavingData  WhereAND
 	OrderByData []SortValueable
 	LimitData   []int
 	renderData  []any // values?
@@ -153,6 +154,62 @@ func (q *QueryBuilder) Where(where ...any) *QueryBuilder {
 func (q *QueryBuilder) OrderBy(field ...SortValueable) *QueryBuilder {
 	q.OrderByData = append(q.OrderByData, field...)
 	return q
+}
+
+// GroupByFields adds GROUP BY clause to the query.
+func (q *QueryBuilder) GroupByFields(fields ...any) *QueryBuilder {
+	for _, field := range fields {
+		switch v := field.(type) {
+		case string:
+			q.GroupBy = append(q.GroupBy, fieldName(v))
+		default:
+			q.GroupBy = append(q.GroupBy, v)
+		}
+	}
+	return q
+}
+
+// Having adds a HAVING clause to the query (used with GROUP BY).
+func (q *QueryBuilder) Having(having ...any) *QueryBuilder {
+	q.HavingData = append(q.HavingData, having...)
+	return q
+}
+
+// SetDistinct enables the DISTINCT keyword in the query.
+func (q *QueryBuilder) SetDistinct() *QueryBuilder {
+	q.Distinct = true
+	return q
+}
+
+// Join adds a JOIN clause to the query.
+func (q *QueryBuilder) Join(joinType, table string, condition ...any) *QueryBuilder {
+	q.renderData = append(q.renderData, &joinClause{
+		joinType:  joinType,
+		table:     tableName(table),
+		condition: condition,
+	})
+	return q
+}
+
+// LeftJoin adds a LEFT JOIN clause to the query.
+func (q *QueryBuilder) LeftJoin(table string, condition ...any) *QueryBuilder {
+	return q.Join("LEFT", table, condition...)
+}
+
+// InnerJoin adds an INNER JOIN clause to the query.
+func (q *QueryBuilder) InnerJoin(table string, condition ...any) *QueryBuilder {
+	return q.Join("INNER", table, condition...)
+}
+
+// RightJoin adds a RIGHT JOIN clause to the query.
+func (q *QueryBuilder) RightJoin(table string, condition ...any) *QueryBuilder {
+	return q.Join("RIGHT", table, condition...)
+}
+
+type joinClause struct {
+	joinType  string
+	table     tableName
+	condition []any
 }
 
 func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
@@ -295,6 +352,9 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 			return err
 		}
 	}
+	if len(q.HavingData) > 0 {
+		ctx.append("HAVING", q.HavingData.escapeValueCtx(ctx))
+	}
 	if len(q.OrderByData) > 0 {
 		ctx.append("ORDER BY")
 		err = ctx.appendCommaValuesSort(q.OrderByData...)
@@ -330,7 +390,6 @@ func (q *QueryBuilder) renderFields(ctx *renderContext) error {
 }
 
 func (q *QueryBuilder) renderTables(ctx *renderContext) error {
-	// TODO extract joins, etc
 	b := &strings.Builder{}
 
 	for n, v := range q.Tables {
@@ -338,6 +397,20 @@ func (q *QueryBuilder) renderTables(ctx *renderContext) error {
 			b.WriteByte(',')
 		}
 		b.WriteString(v.EscapeTable())
+	}
+
+	// Append JOIN clauses
+	for _, rd := range q.renderData {
+		if j, ok := rd.(*joinClause); ok {
+			b.WriteByte(' ')
+			b.WriteString(j.joinType)
+			b.WriteString(" JOIN ")
+			b.WriteString(j.table.EscapeTable())
+			if len(j.condition) > 0 {
+				b.WriteString(" ON ")
+				b.WriteString(escapeWhere(ctx, j.condition, " AND "))
+			}
+		}
 	}
 
 	ctx.append(b.String())

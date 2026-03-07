@@ -19,7 +19,7 @@ func (s *Set) Set(k string) {
 func (s *Set) Unset(k string) {
 	for n, v := range *s {
 		if v == k {
-			*s = slices.Delete(*s, n, n)
+			*s = slices.Delete(*s, n, n+1)
 			return
 		}
 	}

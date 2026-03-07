@@ -102,20 +102,37 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	t.check(ctx)
 
 	be := GetBackend(ctx)
+	engine := be.Engine()
 
 	// Get the formatted table name (respects explicit names)
 	tableName := t.FormattedName(be)
 
 	// INSERT IGNORE QUERY
-	req := "INSERT IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	req := "INSERT "
+
+	switch engine {
+	case EnginePostgreSQL:
+		req += "INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
+		ln := len(t.fields)
+		for i := 0; i < ln; i++ {
+			if i > 0 {
+				req += ","
+			}
+			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
+		}
+		req += ") ON CONFLICT DO NOTHING"
+	case EngineMySQL:
+		fallthrough
+	default:
+		req += "IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+	}
+
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:prep_fail", "psql.table", tableName)
 		return &Error{Query: req, Err: err}
 	}
 	defer stmt.Close()
-
-	engine := be.Engine()
 
 	for _, target := range targets {
 		val := reflect.ValueOf(target).Elem()

@@ -1,4 +1,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/KarpelesLab/psql.svg)](https://pkg.go.dev/github.com/KarpelesLab/psql)
+[![Build Status](https://github.com/KarpelesLab/psql/actions/workflows/test.yml/badge.svg)](https://github.com/KarpelesLab/psql/actions/workflows/test.yml)
+[![Coverage Status](https://coveralls.io/repos/github/KarpelesLab/psql/badge.svg?branch=master)](https://coveralls.io/github/KarpelesLab/psql?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/KarpelesLab/psql)](https://goreportcard.com/report/github.com/KarpelesLab/psql)
 
 # psql
 
@@ -126,6 +129,8 @@ Available comparison functions:
 - `psql.Lte(field, value)` - Less than or equal (<=)
 - `psql.Gt(field, value)` - Greater than (>)
 - `psql.Gte(field, value)` - Greater than or equal (>=)
+- `psql.Between(field, start, end)` - BETWEEN (inclusive range)
+- `&psql.Not{V: value}` - Negate a condition (IS NOT NULL, !=, NOT LIKE, etc.)
 - `psql.WhereOR{value1, value2, ...}` - OR conditions for the same field
 
 ### Advanced Features
@@ -148,16 +153,55 @@ For complex queries, you can inject raw SQL:
 query := psql.B().Select(psql.Raw("COUNT(DISTINCT user_id)")).From("orders")
 ```
 
+#### DISTINCT
+
+```go
+query := psql.B().Select("name").From("users").SetDistinct()
+// SELECT DISTINCT "name" FROM "users"
+```
+
+#### JOINs
+
+```go
+// INNER JOIN
+query := psql.B().
+    Select(psql.F("users", "name"), psql.F("orders", "total")).
+    From("users").
+    InnerJoin("orders", psql.Equal(psql.F("users.id"), psql.F("orders.user_id")))
+
+// LEFT JOIN
+query := psql.B().
+    Select().From("users").
+    LeftJoin("profiles", psql.Equal(psql.F("users.id"), psql.F("profiles.user_id")))
+
+// RIGHT JOIN
+query := psql.B().
+    Select().From("users").
+    RightJoin("orders", psql.Equal(psql.F("users.id"), psql.F("orders.user_id")))
+```
+
+#### GROUP BY and HAVING
+
+```go
+// GROUP BY
+query := psql.B().
+    Select("status", psql.Raw("COUNT(*)")).
+    From("users").
+    GroupByFields("status")
+
+// GROUP BY with HAVING
+query := psql.B().
+    Select("status", psql.Raw("COUNT(*) as cnt")).
+    From("users").
+    GroupByFields("status").
+    Having(psql.Gt(psql.Raw("COUNT(*)"), 5))
+```
+
 #### Aggregate Functions
 
 ```go
 // COUNT
 query := psql.B().Select(psql.Raw("COUNT(*)")).From("users")
-
-// GROUP BY with HAVING
-query := psql.B().Select("status", psql.Raw("COUNT(*) as count")).
-    From("users").
-    Where(psql.Raw("created_at > NOW() - INTERVAL '1 day'"))
 ```
 
 ### Executing Queries

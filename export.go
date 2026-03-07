@@ -16,7 +16,12 @@ func (e Engine) export(in any, f *structField) any {
 	switch v := in.(type) {
 	case time.Time:
 		if v.IsZero() {
-			return "0000-00-00 00:00:00.000000"
+			switch e {
+			case EnginePostgreSQL:
+				return "0001-01-01 00:00:00.000000"
+			default:
+				return "0000-00-00 00:00:00.000000"
+			}
 		}
 		return v.UTC().Format("2006-01-02 15:04:05.999999")
 	case *time.Time:

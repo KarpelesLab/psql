@@ -116,7 +116,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 		}
 		st := t.rowstate(val)
 		if st == nil {
-			return nil, errors.New("object is not appropriate for FetchMapped")
+			return nil, errors.New("object is not appropriate for FetchGrouped")
 		}
 		// TODO avoid using fmt.Sprintf to convert value back to string
 		k := fmt.Sprintf("%v", st.val[key])
