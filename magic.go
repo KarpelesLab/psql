@@ -49,6 +49,7 @@ var magicTypes = map[string]string{
 	"psql.Set":        "type=SET,null=0",
 	"*psql.Set":       "type=SET,null=1",
 	"Stamp+time.Time": "import=TS", // for time.Time fields named "Stamp"
+	"psql.Vector":     "type=VECTOR,null=1",
 }
 
 func DefineMagicType(typ string, definition string) {

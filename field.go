@@ -107,6 +107,12 @@ func (f *structField) sqlType(be *Backend) string {
 			// give up
 			return ""
 		}
+	case "vector":
+		// Vector type: VECTOR(dimensions)
+		if mysize, ok := attrs["size"]; ok {
+			return "vector(" + mysize + ")"
+		}
+		return "vector"
 	default:
 		if be.Engine() == EnginePostgreSQL {
 			// pgsql requires int types to have no length

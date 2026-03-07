@@ -33,6 +33,7 @@ const (
 	keyIndex
 	keyFulltext
 	keySpatial
+	keyVector
 )
 
 type structKey struct {
@@ -58,6 +59,8 @@ func (k *structKey) loadAttrs(attrs map[string]string) {
 			k.typ = keyFulltext
 		case "SPATIAL":
 			k.typ = keySpatial
+		case "VECTOR":
+			k.typ = keyVector
 		default:
 			slog.Warn(fmt.Sprintf("[psql] Unsupported index key type %s assumed as INDEX", t), "event", "psql:key:badkey", "psql.index", k.name)
 		}
@@ -117,6 +120,9 @@ func (k *structKey) defString(be *Backend) string {
 	case keySpatial:
 		s.WriteString("SPATIAL INDEX ")
 		s.WriteString(QuoteName(k.key))
+	case keyVector:
+		// MySQL does not support vector indexes
+		return ""
 	default:
 		return "" // ??
 	}
@@ -179,6 +185,9 @@ func (k *structKey) createIndexPG(tableName string) string {
 	case keyIndex:
 		s.WriteString("CREATE INDEX ")
 		s.WriteString(QuoteName(k.pgKeyName(tableName)))
+	case keyVector:
+		s.WriteString("CREATE INDEX ")
+		s.WriteString(QuoteName(k.pgKeyName(tableName)))
 	default:
 		// FULLTEXT and SPATIAL not supported in PostgreSQL, skip
 		return ""
@@ -186,12 +195,31 @@ func (k *structKey) createIndexPG(tableName string) string {
 
 	s.WriteString(" ON ")
 	s.WriteString(QuoteName(tableName))
+
+	if k.typ == keyVector {
+		// Vector index uses USING clause
+		// Default to HNSW, can be overridden with "method" attr
+		method := "hnsw"
+		if m, ok := k.attrs["method"]; ok {
+			method = strings.ToLower(m)
+		}
+		s.WriteString(" USING ")
+		s.WriteString(method)
+	}
+
 	s.WriteString(" (")
 	for n, f := range k.fields {
 		if n > 0 {
 			s.WriteString(", ")
 		}
 		s.WriteString(QuoteName(f))
+		// For vector indexes, add the operator class if specified
+		if k.typ == keyVector {
+			if opclass, ok := k.attrs["opclass"]; ok {
+				s.WriteString(" ")
+				s.WriteString(opclass)
+			}
+		}
 	}
 	s.WriteByte(')')
 	return s.String()
