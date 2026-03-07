@@ -51,7 +51,7 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	final := make(map[string]*T)
 
 	for rows.Next() {
-		val, err := t.spawn(rows)
+		val, err := t.spawn(ctx, rows)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	final := make(map[string][]*T)
 
 	for rows.Next() {
-		val, err := t.spawn(rows)
+		val, err := t.spawn(ctx, rows)
 		if err != nil {
 			return nil, err
 		}

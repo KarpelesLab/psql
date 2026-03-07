@@ -42,6 +42,17 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 	engine := be.Engine()
 
 	for _, obj := range target {
+		if h, ok := any(obj).(BeforeSaveHook); ok {
+			if err := h.BeforeSave(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(obj).(BeforeUpdateHook); ok {
+			if err := h.BeforeUpdate(ctx); err != nil {
+				return err
+			}
+		}
+
 		// check for changed values
 		upd := make(map[string]*updatedField)
 		allvals := make(map[string]any)
@@ -131,6 +142,17 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			} else {
 				st.init = true
 				st.val = allvals
+			}
+		}
+
+		if h, ok := any(obj).(AfterUpdateHook); ok {
+			if err := h.AfterUpdate(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(obj).(AfterSaveHook); ok {
+			if err := h.AfterSave(ctx); err != nil {
+				return err
 			}
 		}
 	}

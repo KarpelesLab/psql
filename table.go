@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -28,6 +29,7 @@ type TableMeta[T any] struct {
 	state        int
 	attrs        map[string]string
 	futures      sync.Map
+	assocs       map[string]*assocMeta // association metadata by Go field name
 }
 
 type TableMetaIntf interface {
@@ -55,6 +57,7 @@ func Table[T any]() *TableMeta[T] {
 		table:  FormatTableName(typ.Name()),
 		fldcol: make(map[string]*structField),
 		attrs:  make(map[string]string),
+		assocs: make(map[string]*assocMeta),
 		state:  -1,
 	}
 
@@ -67,6 +70,16 @@ func Table[T any]() *TableMeta[T] {
 			continue
 		}
 		finfo := typ.Field(i)
+
+		// Check for psql association tag
+		if psqlTag := finfo.Tag.Get("psql"); psqlTag != "" {
+			assoc := parseAssocTag(psqlTag, finfo, i)
+			if assoc != nil {
+				info.assocs[finfo.Name] = assoc
+			}
+			continue
+		}
+
 		col := finfo.Name
 		attrs := make(map[string]string)
 
@@ -197,13 +210,13 @@ func (t *TableMeta[T]) newobj() *T {
 	return reflect.New(t.typ).Interface().(*T)
 }
 
-func (t *TableMeta[T]) spawnAll(rows *sql.Rows) ([]*T, error) {
+func (t *TableMeta[T]) spawnAll(ctx context.Context, rows *sql.Rows) ([]*T, error) {
 	var res []*T
 	defer rows.Close()
 
 	for rows.Next() {
 		obj := t.newobj()
-		err := t.scanValue(rows, obj)
+		err := t.scanValue(ctx, rows, obj)
 		if err != nil {
 			return res, err
 		}
@@ -212,18 +225,18 @@ func (t *TableMeta[T]) spawnAll(rows *sql.Rows) ([]*T, error) {
 	return res, nil
 }
 
-func (t *TableMeta[T]) spawn(rows *sql.Rows) (*T, error) {
+func (t *TableMeta[T]) spawn(ctx context.Context, rows *sql.Rows) (*T, error) {
 	// spawn an object based on the provided row
 	res := t.newobj()
-	err := t.scanValue(rows, res)
+	err := t.scanValue(ctx, rows, res)
 	return res, err
 }
 
-func (t *TableMeta[T]) ScanTo(row *sql.Rows, v *T) error {
-	return t.scanValue(row, v)
+func (t *TableMeta[T]) ScanTo(ctx context.Context, row *sql.Rows, v *T) error {
+	return t.scanValue(ctx, row, v)
 }
 
-func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
+func (t *TableMeta[T]) scanValue(ctx context.Context, rows *sql.Rows, target *T) error {
 	val := reflect.ValueOf(target).Elem()
 	st := t.rowstate(target)
 
@@ -291,6 +304,12 @@ func (t *TableMeta[T]) scanValue(rows *sql.Rows, target *T) error {
 			}
 			fld.setter(vp, values[i])
 			st.val[cols[i]] = typutil.DeepClone(v.Interface())
+		}
+	}
+
+	if h, ok := any(target).(AfterScanHook); ok {
+		if err := h.AfterScan(ctx); err != nil {
+			return err
 		}
 	}
 

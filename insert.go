@@ -62,6 +62,17 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	defer stmt.Close()
 
 	for _, target := range targets {
+		if h, ok := any(target).(BeforeSaveHook); ok {
+			if err := h.BeforeSave(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(target).(BeforeInsertHook); ok {
+			if err := h.BeforeInsert(ctx); err != nil {
+				return err
+			}
+		}
+
 		val := reflect.ValueOf(target).Elem()
 
 		params := make([]any, len(t.fields))
@@ -80,6 +91,17 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 		if err != nil {
 			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
+		}
+
+		if h, ok := any(target).(AfterInsertHook); ok {
+			if err := h.AfterInsert(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(target).(AfterSaveHook); ok {
+			if err := h.AfterSave(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -133,6 +155,17 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	defer stmt.Close()
 
 	for _, target := range targets {
+		if h, ok := any(target).(BeforeSaveHook); ok {
+			if err := h.BeforeSave(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(target).(BeforeInsertHook); ok {
+			if err := h.BeforeInsert(ctx); err != nil {
+				return err
+			}
+		}
+
 		val := reflect.ValueOf(target).Elem()
 
 		params := make([]any, len(t.fields))
@@ -151,6 +184,17 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 		if err != nil {
 			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert_ignore:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
+		}
+
+		if h, ok := any(target).(AfterInsertHook); ok {
+			if err := h.AfterInsert(ctx); err != nil {
+				return err
+			}
+		}
+		if h, ok := any(target).(AfterSaveHook); ok {
+			if err := h.AfterSave(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

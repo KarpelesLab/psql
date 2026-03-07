@@ -96,6 +96,12 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	defer stmt.Close()
 
 	for _, target := range targets {
+		if h, ok := any(target).(BeforeSaveHook); ok {
+			if err := h.BeforeSave(ctx); err != nil {
+				return err
+			}
+		}
+
 		val := reflect.ValueOf(target).Elem()
 
 		params := make([]any, len(t.fields))
@@ -114,6 +120,12 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 		if err != nil {
 			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", tableName)
 			return &Error{Query: req, Err: err}
+		}
+
+		if h, ok := any(target).(AfterSaveHook); ok {
+			if err := h.AfterSave(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

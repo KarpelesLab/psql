@@ -12,6 +12,7 @@ type FetchOptions struct {
 	LimitCount int             // number of results to return if >0
 	LimitStart int             // seek first record if >0
 	Sort       []SortValueable // fields to sort by
+	Preload    []string        // association fields to preload after fetching
 }
 
 func Sort(fields ...SortValueable) *FetchOptions {
@@ -45,6 +46,9 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 		}
 		if len(opt.Sort) > 0 {
 			res.Sort = append(res.Sort, opt.Sort...)
+		}
+		if len(opt.Preload) > 0 {
+			res.Preload = append(res.Preload, opt.Preload...)
 		}
 	}
 	return res
@@ -97,7 +101,20 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 		// no result
 		return nil, os.ErrNotExist
 	}
-	return t.spawn(rows)
+	result, err := t.spawn(ctx, rows)
+	// Close rows before preloading to free the connection
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(opt.Preload) > 0 {
+		if err := Preload(ctx, []*T{result}, opt.Preload...); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts ...*FetchOptions) error {
@@ -140,8 +157,20 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 		return os.ErrNotExist
 	}
 
-	err = t.scanValue(rows, target)
-	return err
+	err = t.scanValue(ctx, rows, target)
+	// Close rows before preloading to free the connection
+	rows.Close()
+	if err != nil {
+		return err
+	}
+
+	if len(opt.Preload) > 0 {
+		if err := Preload(ctx, []*T{target}, opt.Preload...); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptions) ([]*T, error) {
@@ -185,11 +214,17 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	var final []*T
 
 	for rows.Next() {
-		val, err := t.spawn(rows)
+		val, err := t.spawn(ctx, rows)
 		if err != nil {
 			return nil, err
 		}
 		final = append(final, val)
+	}
+
+	if len(opt.Preload) > 0 && len(final) > 0 {
+		if err := Preload(ctx, final, opt.Preload...); err != nil {
+			return nil, err
+		}
 	}
 
 	return final, nil
@@ -236,7 +271,7 @@ func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOption
 		defer rows.Close()
 
 		for rows.Next() {
-			val, err := t.spawn(rows)
+			val, err := t.spawn(ctx, rows)
 			if err != nil {
 				// iter process has no error reporting method other than panic
 				panic(err)

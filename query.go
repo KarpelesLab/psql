@@ -109,7 +109,7 @@ func (q *SQLQueryT[T]) Each(ctx context.Context, cb func(*T) error) error {
 	defer r.Close()
 
 	for r.Next() {
-		obj, err := t.spawn(r)
+		obj, err := t.spawn(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (q *SQLQueryT[T]) Single(ctx context.Context) (*T, error) {
 	if !r.Next() {
 		return nil, fs.ErrNotExist
 	}
-	return t.spawn(r)
+	return t.spawn(ctx, r)
 }
 
 // All will execute the query and return all the results
@@ -150,5 +150,5 @@ func (q *SQLQueryT[T]) All(ctx context.Context) ([]*T, error) {
 		return nil, err
 	}
 
-	return t.spawnAll(r)
+	return t.spawnAll(ctx, r)
 }
