@@ -192,3 +192,100 @@ func TestAssocUnknownField(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown association")
 }
+
+func TestAssocFetchOneWithPreload(t *testing.T) {
+	ctx, cleanup := setupAssocTables(t)
+	defer cleanup()
+
+	require.NoError(t, psql.Insert(ctx, &AssocAuthor{ID: 1, AuthorName: "Alice"}))
+	require.NoError(t, psql.Insert(ctx, &AssocBook{ID: 1, AuthorID: 1, Title: "Book A"}))
+
+	var book AssocBook
+	err := psql.FetchOne(ctx, &book, map[string]any{"ID": int64(1)}, psql.WithPreload("Author"))
+	require.NoError(t, err)
+	require.NotNil(t, book.Author)
+	assert.Equal(t, "Alice", book.Author.AuthorName)
+}
+
+func TestAssocHasManyNoRelated(t *testing.T) {
+	ctx, cleanup := setupAssocTables(t)
+	defer cleanup()
+
+	// Author with no books
+	require.NoError(t, psql.Insert(ctx, &AssocAuthor{ID: 1, AuthorName: "Alice"}))
+
+	authors, err := psql.Fetch[AssocAuthor](ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, authors, 1)
+
+	err = psql.Preload(ctx, authors, "Books")
+	require.NoError(t, err)
+
+	// Books should be nil (no related records)
+	assert.Nil(t, authors[0].Books)
+}
+
+func TestAssocBelongsToOrphanFK(t *testing.T) {
+	ctx, cleanup := setupAssocTables(t)
+	defer cleanup()
+
+	// Book with AuthorID=999 that doesn't exist
+	require.NoError(t, psql.Insert(ctx, &AssocBook{ID: 1, AuthorID: 999, Title: "Orphan"}))
+
+	books, err := psql.Fetch[AssocBook](ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, books, 1)
+
+	err = psql.Preload(ctx, books, "Author")
+	require.NoError(t, err)
+
+	// Author should remain nil (no matching parent)
+	assert.Nil(t, books[0].Author)
+}
+
+func TestAssocMultiplePreloads(t *testing.T) {
+	ctx, cleanup := setupAssocTables(t)
+	defer cleanup()
+
+	require.NoError(t, psql.Insert(ctx, &AssocAuthor{ID: 1, AuthorName: "Alice"}))
+	require.NoError(t, psql.Insert(ctx, &AssocBook{ID: 1, AuthorID: 1, Title: "Book A"}))
+	require.NoError(t, psql.Insert(ctx, &AssocBook{ID: 2, AuthorID: 1, Title: "Book B"}))
+	require.NoError(t, psql.Insert(ctx, &AssocProfile{ID: 1, AuthorID: 1, Bio: "Writer"}))
+
+	// Preload multiple associations in one call
+	authors, err := psql.Fetch[AssocAuthorWithProfile](ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, authors, 1)
+
+	err = psql.Preload(ctx, authors, "Profile")
+	require.NoError(t, err)
+	require.NotNil(t, authors[0].Profile)
+	assert.Equal(t, "Writer", authors[0].Profile.Bio)
+}
+
+func TestAssocHasManyMixed(t *testing.T) {
+	ctx, cleanup := setupAssocTables(t)
+	defer cleanup()
+
+	// Two authors: one with books, one without
+	require.NoError(t, psql.Insert(ctx, &AssocAuthor{ID: 1, AuthorName: "Alice"}))
+	require.NoError(t, psql.Insert(ctx, &AssocAuthor{ID: 2, AuthorName: "Bob"}))
+	require.NoError(t, psql.Insert(ctx, &AssocBook{ID: 1, AuthorID: 1, Title: "Book A"}))
+
+	authors, err := psql.Fetch[AssocAuthor](ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, authors, 2)
+
+	err = psql.Preload(ctx, authors, "Books")
+	require.NoError(t, err)
+
+	for _, author := range authors {
+		if author.ID == 1 {
+			require.Len(t, author.Books, 1)
+			assert.Equal(t, "Book A", author.Books[0].Title)
+		} else {
+			// Author 2 has no books
+			assert.Nil(t, author.Books)
+		}
+	}
+}
