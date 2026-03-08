@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 // Delete will delete values from the table matching the where parameters.
@@ -25,9 +26,9 @@ func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOpti
 	be := GetBackend(ctx)
 
 	if t.softDelete != nil && !opt.HardDelete {
-		// Soft delete: UPDATE SET DeletedAt = CURRENT_TIMESTAMP
+		// Soft delete: UPDATE SET DeletedAt = NOW()
 		req := B().Update(t.FormattedName(be)).
-			Set(map[string]any{t.softDelete.column: Raw("CURRENT_TIMESTAMP")})
+			Set(map[string]any{t.softDelete.column: time.Now()})
 		if where != nil {
 			req = req.Where(where)
 		}

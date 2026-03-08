@@ -3,6 +3,7 @@ package psql
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 type renderContext struct {
@@ -57,6 +58,17 @@ type sortValueCtxable interface {
 
 func (ctx *renderContext) appendArg(arg any) string {
 	if ctx.useArgs {
+		// SQLite driver doesn't handle time.Time natively; format as RFC3339Nano string
+		if ctx.e == EngineSQLite {
+			switch v := arg.(type) {
+			case time.Time:
+				arg = v.UTC().Format(time.RFC3339Nano)
+			case *time.Time:
+				if v != nil {
+					arg = v.UTC().Format(time.RFC3339Nano)
+				}
+			}
+		}
 		ctx.args = append(ctx.args, arg)
 		switch ctx.e {
 		case EnginePostgreSQL:
