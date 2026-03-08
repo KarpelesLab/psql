@@ -6,20 +6,25 @@ import (
 )
 
 // Count returns the number of records matching the where clause. Pass nil to count all records.
-func Count[T any](ctx context.Context, where any) (int, error) {
-	return Table[T]().Count(ctx, where)
+// Optional [FetchOptions] can be passed to include soft-deleted records or apply scopes.
+func Count[T any](ctx context.Context, where any, opts ...*FetchOptions) (int, error) {
+	return Table[T]().Count(ctx, where, opts...)
 }
 
-func (t *TableMeta[T]) Count(ctx context.Context, where any) (int, error) {
+func (t *TableMeta[T]) Count(ctx context.Context, where any, opts ...*FetchOptions) (int, error) {
 	if t == nil {
 		return 0, ErrNotReady
 	}
 	t.check(ctx)
-	// simplified get
-	req := B().Select(Raw("COUNT(1)")).From(t.table)
+	opt := resolveFetchOpts(opts)
+
+	be := GetBackend(ctx)
+	req := B().Select(Raw("COUNT(1)")).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)

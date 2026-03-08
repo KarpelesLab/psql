@@ -8,14 +8,18 @@ import (
 )
 
 // FetchOptions controls the behavior of Fetch, Get, FetchOne, and related operations.
-// Use helper constructors [Sort], [Limit], [LimitFrom], [WithPreload], and [FetchLock]
-// to create options, or combine multiple options by passing them as variadic arguments.
+// Use helper constructors [Sort], [Limit], [LimitFrom], [WithPreload], [WithScope],
+// [IncludeDeleted], and [FetchLock] to create options, or combine multiple options by
+// passing them as variadic arguments.
 type FetchOptions struct {
-	Lock       bool
-	LimitCount int             // number of results to return if >0
-	LimitStart int             // seek first record if >0
-	Sort       []SortValueable // fields to sort by
-	Preload    []string        // association fields to preload after fetching
+	Lock        bool
+	LimitCount  int             // number of results to return if >0
+	LimitStart  int             // seek first record if >0
+	Sort        []SortValueable // fields to sort by
+	Preload     []string        // association fields to preload after fetching
+	Scopes      []Scope         // reusable query modifiers
+	WithDeleted bool            // include soft-deleted records
+	HardDelete  bool            // force hard delete even with soft delete
 }
 
 // Sort returns a [FetchOptions] that orders results by the given fields.
@@ -41,6 +45,11 @@ func LimitFrom(start, cnt int) *FetchOptions {
 // FetchLock is a [FetchOptions] that adds SELECT ... FOR UPDATE to lock the selected rows.
 var FetchLock = &FetchOptions{Lock: true}
 
+// IncludeDeleted returns a [FetchOptions] that includes soft-deleted records in query results.
+func IncludeDeleted() *FetchOptions {
+	return &FetchOptions{WithDeleted: true}
+}
+
 func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 	res := &FetchOptions{}
 	for _, opt := range opts {
@@ -58,6 +67,15 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 		}
 		if len(opt.Preload) > 0 {
 			res.Preload = append(res.Preload, opt.Preload...)
+		}
+		if len(opt.Scopes) > 0 {
+			res.Scopes = append(res.Scopes, opt.Scopes...)
+		}
+		if opt.WithDeleted {
+			res.WithDeleted = true
+		}
+		if opt.HardDelete {
+			res.HardDelete = true
 		}
 	}
 	return res
@@ -98,16 +116,18 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 	t.check(ctx)
 	// simplified get
 	be := GetBackend(ctx)
+	opt := resolveFetchOpts(opts)
 	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 	req = req.Limit(1)
 
-	opt := resolveFetchOpts(opts)
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)
@@ -155,6 +175,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 	if len(opt.Sort) > 0 {
 		req = req.OrderBy(opt.Sort...)
 	}
@@ -163,6 +184,7 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)
@@ -206,6 +228,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 
 	if len(opt.Sort) > 0 {
 		req = req.OrderBy(opt.Sort...)
@@ -222,6 +245,7 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)
@@ -263,6 +287,7 @@ func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOption
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 
 	if len(opt.Sort) > 0 {
 		req = req.OrderBy(opt.Sort...)
@@ -279,6 +304,7 @@ func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOption
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)

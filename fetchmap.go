@@ -22,10 +22,12 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 
 	if len(opt.Sort) > 0 {
 		req = req.OrderBy(opt.Sort...)
@@ -42,6 +44,7 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)
@@ -83,10 +86,12 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	opt := resolveFetchOpts(opts)
 
 	// SELECT QUERY
-	req := B().Select(Raw(t.fldStr)).From(t.table)
+	be := GetBackend(ctx)
+	req := B().Select(Raw(t.fldStr)).From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
+	t.applySoftDelete(req, opt)
 
 	if len(opt.Sort) > 0 {
 		req = req.OrderBy(opt.Sort...)
@@ -103,6 +108,7 @@ func (t *TableMeta[T]) FetchGrouped(ctx context.Context, where any, key string, 
 	if opt.Lock {
 		req.ForUpdate = true
 	}
+	req = req.Apply(opt.Scopes...)
 
 	// run query
 	rows, err := req.RunQuery(ctx)

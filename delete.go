@@ -5,9 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
-// Delete will delete values from the table matching the where parameters
+// Delete will delete values from the table matching the where parameters.
+// If the table has a soft delete field (DeletedAt), this performs an UPDATE
+// setting the timestamp instead of a hard DELETE. Use [ForceDelete] to bypass
+// soft delete.
 func Delete[T any](ctx context.Context, where any, opts ...*FetchOptions) (sql.Result, error) {
 	return Table[T]().Delete(ctx, where, opts...)
 }
@@ -17,13 +21,42 @@ func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOpti
 		return nil, ErrNotReady
 	}
 	t.check(ctx)
-	// simplified get
-	req := B().Delete().From(t.table)
+	opt := resolveFetchOpts(opts)
+
+	be := GetBackend(ctx)
+
+	if t.softDelete != nil && !opt.HardDelete {
+		// Soft delete: UPDATE SET DeletedAt = NOW()
+		req := B().Update(t.FormattedName(be)).
+			Set(map[string]any{t.softDelete.column: time.Now()})
+		if where != nil {
+			req = req.Where(where)
+		}
+		// Only soft-delete records that aren't already deleted
+		req = req.Where(map[string]any{t.softDelete.column: nil})
+
+		if opt.LimitCount > 0 {
+			if opt.LimitStart > 0 {
+				req = req.Limit(opt.LimitStart, opt.LimitCount)
+			} else {
+				req = req.Limit(opt.LimitCount)
+			}
+		}
+
+		res, err := req.ExecQuery(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, err.Error()+"\n"+debugStack(), "event", "psql:soft_delete:run_fail", "psql.table", t.table)
+			return nil, err
+		}
+		return res, nil
+	}
+
+	// Hard delete
+	req := B().Delete().From(t.FormattedName(be))
 	if where != nil {
 		req = req.Where(where)
 	}
 
-	opt := resolveFetchOpts(opts)
 	if opt.LimitCount > 0 {
 		if opt.LimitStart > 0 {
 			req = req.Limit(opt.LimitStart, opt.LimitCount)

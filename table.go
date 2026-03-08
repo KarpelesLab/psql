@@ -32,6 +32,7 @@ type TableMeta[T any] struct {
 	attrs        map[string]string
 	futures      sync.Map
 	assocs       map[string]*assocMeta // association metadata by Go field name
+	softDelete   *structField          // non-nil if soft delete is enabled
 }
 
 type TableMetaIntf interface {
@@ -173,6 +174,11 @@ func Table[T any]() *TableMeta[T] {
 
 		info.fields = append(info.fields, fld)
 		info.fldcol[fld.column] = fld
+
+		// Detect soft delete: *time.Time field named "DeletedAt" or with softdelete attr
+		if _, ok := attrs["softdelete"]; ok || (finfo.Name == "DeletedAt" && finfo.Type == ptrTimeType) {
+			info.softDelete = fld
+		}
 	}
 
 	if len(info.fields) == 0 {

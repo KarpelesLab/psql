@@ -249,6 +249,15 @@ type joinClause struct {
 	condition []any
 }
 
+// Apply runs the given scopes on this query builder, returning the modified builder.
+// Scopes can add WHERE, ORDER BY, LIMIT, or any other clause.
+func (q *QueryBuilder) Apply(scopes ...Scope) *QueryBuilder {
+	for _, s := range scopes {
+		q = s(q)
+	}
+	return q
+}
+
 // Render generates the SQL query string for the current engine. Values are
 // embedded directly (not parameterized). For parameterized queries, use [QueryBuilder.RenderArgs].
 func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
