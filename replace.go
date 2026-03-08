@@ -5,8 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"reflect"
-	"strconv"
-	"strings"
 )
 
 // Replace performs an upsert operation: inserts the record if it doesn't exist, or
@@ -34,6 +32,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	tableName := t.FormattedName(be)
 
 	// REPLACE QUERY
+	ph := engine.Placeholders(len(t.fields), 1)
 	var req string
 
 	switch engine {
@@ -42,15 +41,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 			return errors.New("cannot use Replace without a primary key on PostgreSQL")
 		}
 		// INSERT INTO ... ON CONFLICT (key) DO UPDATE SET ...
-		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
-		ln := len(t.fields)
-		for i := 0; i < ln; i++ {
-			if i > 0 {
-				req += ","
-			}
-			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
-		}
-		req += ") ON CONFLICT ("
+		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ") ON CONFLICT ("
 		for i, col := range t.mainKey.fields {
 			if i > 0 {
 				req += ","
@@ -78,9 +69,9 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 			req += QuoteName(f.column) + "=EXCLUDED." + QuoteName(f.column)
 		}
 	case EngineSQLite:
-		req = "INSERT OR REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+		req = "INSERT OR REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	default: // MySQL
-		req = "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+		req = "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	}
 
 	stmt, err := doPrepareContext(ctx, req)

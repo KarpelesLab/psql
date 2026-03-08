@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"reflect"
-	"strconv"
-	"strings"
 )
 
 // Insert is a short way to insert objects into database
@@ -38,22 +36,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	tableName := t.FormattedName(be)
 
 	// INSERT QUERY
-	req := "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
-
-	switch engine {
-	case EnginePostgreSQL:
-		// need to add $1, $2, $3, ...
-		ln := len(t.fields)
-		for i := 0; i < ln; i++ {
-			if i > 0 {
-				req += ","
-			}
-			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
-		}
-	default: // MySQL, SQLite both use ?
-		req += strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",")
-	}
-	req += ")"
+	req := "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + engine.Placeholders(len(t.fields), 1) + ")"
 	stmt, err := doPrepareContext(ctx, req)
 	if err != nil {
 		slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:insert:prep_fail", "psql.table", tableName)
@@ -131,23 +114,16 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	tableName := t.FormattedName(be)
 
 	// INSERT IGNORE QUERY
-	req := "INSERT "
+	ph := engine.Placeholders(len(t.fields), 1)
+	var req string
 
 	switch engine {
 	case EnginePostgreSQL:
-		req += "INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES ("
-		ln := len(t.fields)
-		for i := 0; i < ln; i++ {
-			if i > 0 {
-				req += ","
-			}
-			req += "$" + strconv.FormatUint(uint64(i)+1, 10)
-		}
-		req += ") ON CONFLICT DO NOTHING"
+		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ") ON CONFLICT DO NOTHING"
 	case EngineSQLite:
-		req = "INSERT OR IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+		req = "INSERT OR IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	default: // MySQL
-		req += "IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(t.fields)), ",") + ")"
+		req = "INSERT IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	}
 
 	stmt, err := doPrepareContext(ctx, req)

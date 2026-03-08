@@ -262,7 +262,8 @@ func (q *QueryBuilder) Apply(scopes ...Scope) *QueryBuilder {
 // embedded directly (not parameterized). For parameterized queries, use [QueryBuilder.RenderArgs].
 func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
 	// Generate the actual SQL query
-	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: false}
+	e := GetBackend(ctx).Engine()
+	rctx := &renderContext{e: e, d: e.dialect(), useArgs: false}
 	err := q.render(rctx)
 	if err != nil {
 		return "", err
@@ -274,7 +275,8 @@ func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
 // returns the arguments separately. Uses $1/$2/... for PostgreSQL and ? for MySQL/SQLite.
 func (q *QueryBuilder) RenderArgs(ctx context.Context) (string, []any, error) {
 	// Generate the actual SQL query
-	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: true}
+	e := GetBackend(ctx).Engine()
+	rctx := &renderContext{e: e, d: e.dialect(), useArgs: true}
 	err := q.render(rctx)
 	if err != nil {
 		return "", nil, err
@@ -422,13 +424,7 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 	case 1:
 		ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
 	case 2:
-		// PostgreSQL and SQLite use LIMIT x OFFSET y, MySQL uses LIMIT x, y
-		if ctx.e == EnginePostgreSQL || ctx.e == EngineSQLite {
-			ctx.append("LIMIT", strconv.Itoa(q.LimitData[0]))
-			ctx.append("OFFSET", strconv.Itoa(q.LimitData[1]))
-		} else {
-			ctx.append("LIMIT", strconv.Itoa(q.LimitData[0])+",", strconv.Itoa(q.LimitData[1]))
-		}
+		ctx.append(ctx.d.LimitOffset(q.LimitData[0], q.LimitData[1]))
 	}
 	if q.ForUpdate {
 		ctx.append("FOR UPDATE")

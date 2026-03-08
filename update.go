@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strconv"
 )
 
 // Update saves changes to existing database records. Only fields that have changed
@@ -88,6 +87,7 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		// Get the formatted table name (respects explicit names)
 		tableName := t.FormattedName(be)
 
+		d := engine.dialect()
 		req := "UPDATE " + QuoteName(tableName) + " SET "
 		var flds []any
 		first := true
@@ -97,13 +97,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			} else {
 				first = false
 			}
-			switch engine {
-			case EnginePostgreSQL:
-				req += QuoteName(k) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
-			default: // MySQL, SQLite both use ?
-				req += QuoteName(k) + " = ?"
-			}
 			flds = append(flds, engine.export(v.v, v.f))
+			req += QuoteName(k) + " = " + d.Placeholder(len(flds))
 		}
 		req += " WHERE "
 		first = true
@@ -114,14 +109,8 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 			} else {
 				first = false
 			}
-
-			switch engine {
-			case EnginePostgreSQL:
-				req += QuoteName(col) + " = $" + strconv.FormatUint(uint64(len(flds))+1, 10)
-			default: // MySQL, SQLite both use ?
-				req += QuoteName(col) + " = ?"
-			}
 			flds = append(flds, engine.export(val.Field(t.fldcol[col].index).Interface(), t.fldcol[col]))
+			req += QuoteName(col) + " = " + d.Placeholder(len(flds))
 		}
 
 		_, err := ExecContext(ctx, req, flds...)
