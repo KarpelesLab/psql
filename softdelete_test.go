@@ -12,9 +12,9 @@ import (
 
 type SoftDelTable struct {
 	psql.Name `sql:"test_softdel"`
-	ID        int64      `sql:",key=PRIMARY"`
-	Label     string     `sql:",type=VARCHAR,size=128"`
-	DeletedAt *time.Time `sql:",type=TIMESTAMPTZ"`
+	ID        int64  `sql:",key=PRIMARY"`
+	Label     string `sql:",type=VARCHAR,size=128"`
+	DeletedAt *time.Time
 }
 
 func TestSoftDelete(t *testing.T) {
