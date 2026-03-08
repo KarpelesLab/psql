@@ -1,7 +1,6 @@
 package psql
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -10,28 +9,28 @@ type VectorDistanceOp int
 
 const (
 	// VectorL2 is the L2 (Euclidean) distance operator.
-	// PostgreSQL pgvector: <->   CockroachDB: vec_l2_distance()
+	// PostgreSQL/CockroachDB: <->   Fallback: vec_l2_distance()
 	VectorL2 VectorDistanceOp = iota
 	// VectorCosine is the cosine distance operator.
-	// PostgreSQL pgvector: <=>   CockroachDB: vec_cosine_distance()
+	// PostgreSQL/CockroachDB: <=>   Fallback: vec_cosine_distance()
 	VectorCosine
 	// VectorInnerProduct is the negative inner product operator.
-	// PostgreSQL pgvector: <#>   CockroachDB: vec_inner_product()
+	// PostgreSQL/CockroachDB: <#>   Fallback: vec_inner_product()
 	VectorInnerProduct
 )
 
 // VectorDistance represents a vector distance calculation between a field and a vector.
-// It implements EscapeValueable and SortValueable so it can be used in WHERE and ORDER BY.
+// It implements [EscapeValueable] and [SortValueable] so it can be used in WHERE and ORDER BY.
 //
 // Usage:
 //
 //	// In ORDER BY (nearest neighbor search):
 //	psql.B().Select().From("items").OrderBy(psql.VecL2Distance(psql.F("Embedding"), queryVec))
 //
-//	// In WHERE (filter by distance):
-//	psql.B().Select().From("items").Where(map[string]any{
-//	    psql.VecCosineDistance(psql.F("Embedding"), queryVec).String(): psql.Lt(nil, 0.5),
-//	})
+//	// In WHERE (filter by distance threshold):
+//	psql.B().Select().From("items").Where(
+//	    psql.Lt(psql.VecCosineDistance(psql.F("Embedding"), queryVec), 0.5),
+//	)
 type VectorDistance struct {
 	Field any              // typically a fieldName via psql.F()
 	Vec   Vector           // the query vector
@@ -39,16 +38,19 @@ type VectorDistance struct {
 }
 
 // VecL2Distance creates an L2 (Euclidean) distance expression.
+// PostgreSQL/CockroachDB renders as: field <-> '[1,2,3]'
 func VecL2Distance(field any, vec Vector) *VectorDistance {
 	return &VectorDistance{Field: field, Vec: vec, Op: VectorL2}
 }
 
 // VecCosineDistance creates a cosine distance expression.
+// PostgreSQL/CockroachDB renders as: field <=> '[1,2,3]'
 func VecCosineDistance(field any, vec Vector) *VectorDistance {
 	return &VectorDistance{Field: field, Vec: vec, Op: VectorCosine}
 }
 
 // VecInnerProduct creates a negative inner product distance expression.
+// PostgreSQL/CockroachDB renders as: field <#> '[1,2,3]'
 func VecInnerProduct(field any, vec Vector) *VectorDistance {
 	return &VectorDistance{Field: field, Vec: vec, Op: VectorInnerProduct}
 }
@@ -76,9 +78,12 @@ func (d *VectorDistance) sortEscapeValue() string {
 	return d.EscapeValue()
 }
 
-// renderPG renders using PostgreSQL pgvector operator syntax.
-// pgvector operators: <-> (L2), <=> (cosine), <#> (inner product)
-// CockroachDB also supports these operators for its native vector type.
+// sortEscapeValueCtx implements sortValueCtxable for engine-aware ORDER BY rendering.
+func (d *VectorDistance) sortEscapeValueCtx(ctx *renderContext) string {
+	return d.escapeValueCtx(ctx)
+}
+
+// renderPG renders using PostgreSQL/CockroachDB operator syntax.
 func (d *VectorDistance) renderPG(ctx *renderContext) string {
 	b := &strings.Builder{}
 	b.WriteString(escapeCtx(ctx, d.Field))
@@ -128,7 +133,7 @@ func (d *VectorDistance) renderFunc(ctx *renderContext) string {
 	return b.String()
 }
 
-// VecOrderBy is a convenience that returns a SortValueable for ordering by vector distance.
+// VecOrderBy is a convenience that returns a [SortValueable] for ordering by vector distance.
 // The direction defaults to ASC (nearest first).
 //
 // Usage:
@@ -147,5 +152,62 @@ type ordVecDistance struct {
 }
 
 func (o *ordVecDistance) sortEscapeValue() string {
-	return fmt.Sprintf("%s %s", o.dist.EscapeValue(), o.ord)
+	return o.dist.EscapeValue() + " " + o.ord
+}
+
+func (o *ordVecDistance) sortEscapeValueCtx(ctx *renderContext) string {
+	return o.dist.escapeValueCtx(ctx) + " " + o.ord
+}
+
+// VectorComparison represents a vector equality or inequality comparison.
+// It implements [EscapeValueable] for use in WHERE clauses.
+//
+// Use [VecEqual] and [VecNotEqual] instead of constructing directly.
+type VectorComparison struct {
+	Field any    // typically a fieldName via psql.F()
+	Vec   Vector // the vector to compare against
+	Op    string // "=" or "<>"
+}
+
+// VecEqual creates a vector equality comparison (field = vector).
+//
+//	psql.B().Select().From("items").Where(psql.VecEqual(psql.F("Embedding"), targetVec))
+func VecEqual(field any, vec Vector) *VectorComparison {
+	return &VectorComparison{Field: field, Vec: vec, Op: "="}
+}
+
+// VecNotEqual creates a vector inequality comparison (field <> vector).
+//
+//	psql.B().Select().From("items").Where(psql.VecNotEqual(psql.F("Embedding"), targetVec))
+func VecNotEqual(field any, vec Vector) *VectorComparison {
+	return &VectorComparison{Field: field, Vec: vec, Op: "<>"}
+}
+
+// EscapeValue renders the comparison without engine context.
+func (c *VectorComparison) EscapeValue() string {
+	return c.escapeValueCtx(nil)
+}
+
+// escapeValueCtx renders the comparison with engine context.
+func (c *VectorComparison) escapeValueCtx(ctx *renderContext) string {
+	b := &strings.Builder{}
+	if ctx != nil {
+		b.WriteString(escapeCtx(ctx, c.Field))
+	} else {
+		b.WriteString(Escape(c.Field))
+	}
+	b.WriteString(" ")
+	b.WriteString(c.Op)
+	b.WriteString(" ")
+	if ctx != nil {
+		b.WriteString(escapeCtx(ctx, c.Vec.String()))
+	} else {
+		b.WriteString(Escape(c.Vec.String()))
+	}
+	return b.String()
+}
+
+// String returns a display representation.
+func (c *VectorComparison) String() string {
+	return c.EscapeValue()
 }

@@ -37,11 +37,22 @@ func (ctx *renderContext) appendCommaValuesSort(vals ...SortValueable) error {
 		if n != 0 {
 			b.WriteByte(',')
 		}
-		b.WriteString(v.sortEscapeValue())
+		// Use engine-aware rendering if available (e.g., vector distance operators)
+		if vc, ok := v.(sortValueCtxable); ok {
+			b.WriteString(vc.sortEscapeValueCtx(ctx))
+		} else {
+			b.WriteString(v.sortEscapeValue())
+		}
 	}
 
 	ctx.append(b.String())
 	return nil
+}
+
+// sortValueCtxable is an optional interface for SortValueable implementations
+// that need engine-aware rendering (e.g., PostgreSQL vector operators).
+type sortValueCtxable interface {
+	sortEscapeValueCtx(ctx *renderContext) string
 }
 
 func (ctx *renderContext) appendArg(arg any) string {

@@ -29,17 +29,31 @@ err := psql.Insert(ctx, &Item{
 })
 ```
 
-## Similarity Search
+## Vector Comparison Operators
 
-### Vector Distance Functions
+All five vector comparison operators are supported:
 
-Three distance operations are available:
+| Function | Description | SQL Operator |
+|----------|-------------|-------------|
+| `VecEqual` | Equality | `=` |
+| `VecNotEqual` | Inequality | `<>` |
+| `VecL2Distance` | L2 (Euclidean) distance | `<->` |
+| `VecCosineDistance` | Cosine distance | `<=>` |
+| `VecInnerProduct` | Negative inner product | `<#>` |
 
-| Function | Description | Operator (PostgreSQL) | Function (CockroachDB) |
-|----------|-------------|----------------------|----------------------|
-| `VecL2Distance` | Euclidean distance | `<->` | `vec_l2_distance()` |
-| `VecCosineDistance` | Cosine distance | `<=>` | `vec_cosine_distance()` |
-| `VecInnerProduct` | Negative inner product | `<#>` | `vec_inner_product()` |
+### Equality / Inequality
+
+```go
+// Find items with an exact vector match
+rows, err := psql.B().Select().From("items").
+    Where(psql.VecEqual(psql.F("Embedding"), targetVec)).
+    RunQuery(ctx)
+
+// Find items that differ from a vector
+rows, err := psql.B().Select().From("items").
+    Where(psql.VecNotEqual(psql.F("Embedding"), targetVec)).
+    RunQuery(ctx)
+```
 
 ### Nearest Neighbor Search
 
@@ -62,6 +76,17 @@ rows, err := psql.B().
     From("items").
     OrderBy(psql.VecOrderBy(psql.F("Embedding"), queryVec, psql.VectorCosine)).
     Limit(10).
+    RunQuery(ctx)
+```
+
+### Filtering by Distance
+
+Use distance expressions in WHERE to filter by a threshold:
+
+```go
+// Only items within cosine distance 0.5
+rows, err := psql.B().Select().From("items").
+    Where(psql.Lt(psql.VecCosineDistance(psql.F("Embedding"), queryVec), 0.5)).
     RunQuery(ctx)
 ```
 

@@ -117,6 +117,42 @@ func TestVecDistanceInBuilder(t *testing.T) {
 	assert.Contains(t, sql, "Embedding")
 }
 
+func TestVecEqualInBuilder(t *testing.T) {
+	ctx := context.Background()
+	v := psql.Vector{1, 2, 3}
+
+	// VecEqual
+	query := psql.B().Select().From("items").
+		Where(psql.VecEqual(psql.F("Embedding"), v))
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "= ")
+	assert.Contains(t, sql, "Embedding")
+	assert.Contains(t, sql, "1,2,3")
+
+	// VecNotEqual
+	query2 := psql.B().Select().From("items").
+		Where(psql.VecNotEqual(psql.F("Embedding"), v))
+	sql2, err := query2.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql2, "<>")
+	assert.Contains(t, sql2, "Embedding")
+}
+
+func TestVecDistanceWithThreshold(t *testing.T) {
+	ctx := context.Background()
+	v := psql.Vector{1, 2, 3}
+
+	// Use distance in WHERE with a threshold
+	query := psql.B().Select().From("items").
+		Where(psql.Lt(psql.VecCosineDistance(psql.F("Embedding"), v), 0.5))
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "WHERE")
+	assert.Contains(t, sql, "Embedding")
+	assert.Contains(t, sql, "0.5")
+}
+
 // Integration tests for vector operations
 
 type VecTable struct {
