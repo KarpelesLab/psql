@@ -49,7 +49,24 @@ func ContextTx(ctx context.Context, tx *TxProxy) context.Context {
 	return &ctxValueObj{ctx, tx}
 }
 
-// Tx can be used to run a function inside a sql transaction for isolation/etc
+// Tx runs cb inside a SQL transaction. If cb returns nil the transaction is
+// committed; otherwise it is rolled back and the error is returned.
+//
+// The context passed to cb carries the transaction, so all psql operations
+// using it execute within that transaction. To run a query outside the
+// transaction (e.g. to persist a log entry before rolling back), use the
+// original context captured before calling Tx, or call [EscapeTx] on the
+// transactional context:
+//
+//	outerCtx := ctx
+//	err := psql.Tx(ctx, func(ctx context.Context) error {
+//	    // ctx is transactional; outerCtx is not
+//	    if err := psql.Insert(ctx, &order); err != nil {
+//	        psql.Insert(outerCtx, &AuditLog{Event: "order_failed"})
+//	        return err // rolls back, but the audit log persists
+//	    }
+//	    return nil
+//	})
 func Tx(ctx context.Context, cb func(ctx context.Context) error) error {
 	tx, err := BeginTx(ctx, nil)
 	if err != nil {
@@ -92,8 +109,22 @@ func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 	}
 }
 
-// EscapeTx allows obtaining the context underlying a current transaction, this can be useful
-// if a query needs to be run outside of a transaction (for example to log something, etc)
+// EscapeTx returns the context that was active before the innermost transaction
+// was attached. This is useful when you need to run a query outside the current
+// transaction — for example, to store an audit log or error record that must
+// persist even if the transaction is rolled back.
+//
+// If no transaction is found in the context chain, EscapeTx returns (ctx, false).
+// The returned context still carries the [Backend] and any other values that were
+// set above the transaction layer.
+//
+//	func logFailure(ctx context.Context, msg string) {
+//	    outerCtx, ok := psql.EscapeTx(ctx)
+//	    if !ok {
+//	        outerCtx = ctx // no transaction, use as-is
+//	    }
+//	    psql.Insert(outerCtx, &ErrorLog{Message: msg})
+//	}
 func EscapeTx(ctx context.Context) (context.Context, bool) {
 	for {
 		obj := ctx.Value(ctxValueObjFetch)

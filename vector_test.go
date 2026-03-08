@@ -207,6 +207,222 @@ func TestVectorIntegration(t *testing.T) {
 	_ = psql.Q("DROP TABLE IF EXISTS \"test_vector\"").Exec(ctx)
 }
 
+func TestVectorOperatorsIntegration(t *testing.T) {
+	be := getTestBackend(t)
+	if be.Engine() != psql.EnginePostgreSQL {
+		t.Skip("Vector operator tests only applicable for PostgreSQL/CockroachDB")
+	}
+
+	ctx := be.Plug(context.Background())
+
+	_ = psql.Q("CREATE EXTENSION IF NOT EXISTS vector").Exec(ctx)
+	_ = psql.Q("DROP TABLE IF EXISTS \"test_vector_ops\"").Exec(ctx)
+
+	type VecOpsTable struct {
+		psql.Name `sql:"test_vector_ops"`
+		ID        int64       `sql:",key=PRIMARY"`
+		Label     string      `sql:",type=VARCHAR,size=128"`
+		Embedding psql.Vector `sql:",type=VECTOR,size=3"`
+	}
+
+	// Insert test vectors
+	err := psql.Insert(ctx, &VecOpsTable{ID: 1, Label: "origin_x", Embedding: psql.Vector{1, 0, 0}})
+	if err != nil {
+		t.Skipf("Vector type not supported: %v", err)
+	}
+	err = psql.Insert(ctx, &VecOpsTable{ID: 2, Label: "origin_y", Embedding: psql.Vector{0, 1, 0}})
+	require.NoError(t, err)
+	err = psql.Insert(ctx, &VecOpsTable{ID: 3, Label: "diagonal", Embedding: psql.Vector{1, 1, 0}})
+	require.NoError(t, err)
+	err = psql.Insert(ctx, &VecOpsTable{ID: 4, Label: "far", Embedding: psql.Vector{10, 10, 10}})
+	require.NoError(t, err)
+
+	t.Run("L2Distance_OrderBy", func(t *testing.T) {
+		// Order by L2 distance from [1,0,0] — closest should be "origin_x" (distance 0)
+		queryVec := psql.Vector{1, 0, 0}
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			OrderBy(psql.VecL2Distance(psql.F("Embedding"), queryVec)).
+			Limit(4).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 4)
+		assert.Equal(t, "origin_x", labels[0], "closest vector should be origin_x")
+		assert.Equal(t, "far", labels[3], "farthest vector should be far")
+	})
+
+	t.Run("CosineDistance_OrderBy", func(t *testing.T) {
+		// Order by cosine distance from [1,1,0] — "diagonal" should be closest (same direction)
+		queryVec := psql.Vector{1, 1, 0}
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			OrderBy(psql.VecCosineDistance(psql.F("Embedding"), queryVec)).
+			Limit(4).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 4)
+		assert.Equal(t, "diagonal", labels[0], "closest by cosine should be diagonal")
+	})
+
+	t.Run("InnerProduct_OrderBy", func(t *testing.T) {
+		// Order by negative inner product from [1,0,0]
+		// inner product: origin_x=1, origin_y=0, diagonal=1, far=10
+		// negative inner product (ascending): origin_y(0), origin_x(1), diagonal(1), far(10)
+		// Note: <#> returns negative inner product, so ascending = highest inner product last
+		queryVec := psql.Vector{1, 0, 0}
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			OrderBy(psql.VecOrderBy(psql.F("Embedding"), queryVec, psql.VectorInnerProduct)).
+			Limit(4).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 4)
+		// Negative inner product ascending means smallest (most negative) first = highest actual IP
+		// For <#>: -IP, so origin_y has -0=0, origin_x has -1, diagonal has -1, far has -10
+		// Ascending: far(-10), origin_x(-1) or diagonal(-1), origin_y(0)
+		assert.Equal(t, "far", labels[0], "highest inner product first with ASC on negative IP")
+	})
+
+	t.Run("VecEqual_Where", func(t *testing.T) {
+		// Find the exact vector [1,0,0]
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			Where(psql.VecEqual(psql.F("Embedding"), psql.Vector{1, 0, 0})).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 1)
+		assert.Equal(t, "origin_x", labels[0])
+	})
+
+	t.Run("VecNotEqual_Where", func(t *testing.T) {
+		// Find all vectors != [1,0,0]
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			Where(psql.VecNotEqual(psql.F("Embedding"), psql.Vector{1, 0, 0})).
+			OrderBy(psql.S("ID")).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 3)
+		assert.Equal(t, "origin_y", labels[0])
+		assert.Equal(t, "diagonal", labels[1])
+		assert.Equal(t, "far", labels[2])
+	})
+
+	t.Run("L2Distance_Where_Threshold", func(t *testing.T) {
+		// Find vectors within L2 distance < 2.0 of [1,0,0]
+		// L2 distances from [1,0,0]: origin_x=0, origin_y=sqrt(2)≈1.414, diagonal=1, far=sqrt(181)≈13.45
+		queryVec := psql.Vector{1, 0, 0}
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			Where(psql.Lt(psql.VecL2Distance(psql.F("Embedding"), queryVec), 2.0)).
+			OrderBy(psql.VecL2Distance(psql.F("Embedding"), queryVec)).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		require.Len(t, labels, 3, "origin_x(0), diagonal(1), origin_y(1.414) should be within distance 2")
+		assert.Equal(t, "origin_x", labels[0])
+		assert.Equal(t, "diagonal", labels[1])
+		assert.Equal(t, "origin_y", labels[2])
+	})
+
+	t.Run("CosineDistance_Where_Threshold", func(t *testing.T) {
+		// Find vectors within cosine distance < 0.5 of [1,1,0]
+		// Cosine distance = 1 - cosine_similarity
+		// diagonal [1,1,0]: cos_sim=1, dist=0
+		// origin_x [1,0,0]: cos_sim=1/sqrt(2)≈0.707, dist≈0.293
+		// origin_y [0,1,0]: cos_sim=1/sqrt(2)≈0.707, dist≈0.293
+		// far [10,10,10]: cos_sim=20/(sqrt(2)*sqrt(300))≈0.816, dist≈0.184
+		queryVec := psql.Vector{1, 1, 0}
+		rows, err := psql.B().
+			Select("ID", "Label").
+			From("test_vector_ops").
+			Where(psql.Lt(psql.VecCosineDistance(psql.F("Embedding"), queryVec), 0.5)).
+			OrderBy(psql.VecCosineDistance(psql.F("Embedding"), queryVec)).
+			RunQuery(ctx)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		var labels []string
+		for rows.Next() {
+			var id int64
+			var label string
+			require.NoError(t, rows.Scan(&id, &label))
+			labels = append(labels, label)
+		}
+		require.NoError(t, rows.Err())
+		assert.GreaterOrEqual(t, len(labels), 1, "at least diagonal should be within cosine distance 0.5")
+		assert.Equal(t, "diagonal", labels[0], "diagonal should be most similar")
+	})
+
+	// Clean up
+	_ = psql.Q("DROP TABLE IF EXISTS \"test_vector_ops\"").Exec(ctx)
+}
+
 type VecIdxTable struct {
 	psql.Name `sql:"test_vector_idx"`
 	psql.Key  `sql:"EmbeddingIdx,type=VECTOR,fields='Embedding',method=hnsw"`

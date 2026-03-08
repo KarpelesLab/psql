@@ -145,7 +145,18 @@
 //	    return nil // commit; return error to rollback
 //	})
 //
-// Nested transactions are supported via SQL savepoints.
+// Nested transactions are supported via SQL savepoints. To run a query
+// outside the current transaction (e.g., logging a failure before rolling
+// back), use the original pre-transaction context or call [EscapeTx]:
+//
+//	outerCtx := ctx
+//	psql.Tx(ctx, func(ctx context.Context) error {
+//	    if err := psql.Insert(ctx, &order); err != nil {
+//	        psql.Insert(outerCtx, &AuditLog{Event: "failed"}) // persists after rollback
+//	        return err
+//	    }
+//	    return nil
+//	})
 //
 // # Vector Support
 //
