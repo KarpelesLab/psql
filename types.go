@@ -34,10 +34,18 @@ func (r *rawValue) sortEscapeValue() string {
 	return r.V
 }
 
+// Raw creates a raw SQL expression that is injected verbatim into queries without
+// escaping. Use carefully to avoid SQL injection:
+//
+//	psql.B().Select(psql.Raw("COUNT(*)")).From("users")
 func Raw(s string) EscapeValueable {
 	return &rawValue{s}
 }
 
+// Not negates a condition. Wraps any value to produce IS NOT NULL, !=, NOT LIKE, etc.
+//
+//	&psql.Not{V: nil}                          // IS NOT NULL
+//	&psql.Not{V: psql.Equal(psql.F("a"), "b")} // a != b
 type Not struct {
 	V any
 }

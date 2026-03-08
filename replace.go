@@ -9,15 +9,10 @@ import (
 	"strings"
 )
 
-// Replace is a short way to replace objects into database
-//
-// psql.Replace(ctx, obj)
-//
-// Is equivalent to:
-//
-// psql.Table(obj).Replace(ctx, obj)
-//
-// All passed objects must be of the same type
+// Replace performs an upsert operation: inserts the record if it doesn't exist, or
+// replaces it if a conflicting key exists. On MySQL this uses REPLACE INTO, on
+// PostgreSQL it uses INSERT ... ON CONFLICT DO UPDATE, on SQLite INSERT OR REPLACE.
+// Fires [BeforeSaveHook] and [AfterSaveHook] if implemented.
 func Replace[T any](ctx context.Context, target ...*T) error {
 	if len(target) == 0 {
 		return nil

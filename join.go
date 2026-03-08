@@ -2,6 +2,7 @@ package psql
 
 import "context"
 
+// Join represents a SQL JOIN clause with a table, condition, type, and optional alias.
 type Join struct {
 	Table     string
 	Condition string // condition for join

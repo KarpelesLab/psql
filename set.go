@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// Set represents a SQL SET column type, stored as a comma-separated string in the
+// database. It provides Set/Unset/Has methods for manipulating individual values
+// and implements sql.Scanner and driver.Valuer for automatic serialization.
 type Set []string
 
 func (s *Set) Set(k string) {

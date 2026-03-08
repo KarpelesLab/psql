@@ -4,6 +4,9 @@ import (
 	"strings"
 )
 
+// Like represents a SQL LIKE condition. Use in WHERE clauses:
+//
+//	psql.B().Select().From("users").Where(&psql.Like{psql.F("name"), "John%"})
 type Like struct {
 	Field any
 	Like  string

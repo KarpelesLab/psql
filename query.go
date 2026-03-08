@@ -7,22 +7,27 @@ import (
 	"io/fs"
 )
 
+// SQLQuery represents a raw SQL query with arguments. Create one with [Q].
+// Use [SQLQuery.Each] to iterate rows or [SQLQuery.Exec] to execute without results.
 type SQLQuery struct {
 	Query string
 	Args  []any
 }
 
+// SQLQueryT is a typed raw SQL query that automatically scans results into type T.
+// Create one with [QT]. Use [SQLQueryT.Each], [SQLQueryT.Single], or [SQLQueryT.All]
+// to execute and get typed results.
 type SQLQueryT[T any] struct {
 	Query string
 	Args  []any
 }
 
-// Q is a short hand to create a Query object
+// Q creates a raw [SQLQuery] for executing arbitrary SQL:
 func Q(q string, args ...any) *SQLQuery {
 	return &SQLQuery{q, args}
 }
 
-// QT is a short hand to create a Query object against a specific table
+// QT creates a typed [SQLQueryT] that scans results into type T:
 func QT[T any](q string, args ...any) *SQLQueryT[T] {
 	return &SQLQueryT[T]{q, args}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Count returns the number of records matching the where clause. Pass nil to count all records.
 func Count[T any](ctx context.Context, where any) (int, error) {
 	return Table[T]().Count(ctx, where)
 }

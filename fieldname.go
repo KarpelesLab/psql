@@ -30,6 +30,12 @@ func F(field ...string) EscapeValueable {
 	}
 }
 
+// S creates a sort expression for ORDER BY clauses. The last argument may be
+// "ASC" or "DESC" to set the sort direction. If omitted, the database default
+// (typically ASC) is used:
+//
+//	psql.S("name", "ASC")         // "name" ASC
+//	psql.S("table", "field", "DESC") // "table"."field" DESC
 func S(field ...string) SortValueable {
 	// same as F but last value must be "ASC" or "DESC"
 	if len(field) == 0 {
@@ -105,8 +111,8 @@ func (t tableName) EscapeTable() string {
 	return QuoteName(string(t))
 }
 
-// quote a name (field, etc)
-// This doesn't use the Namer since this is just for escaping a name that's already been formatted
+// QuoteName quotes a SQL identifier (table name, column name, etc.) with double quotes,
+// escaping any embedded double quotes. This does not apply naming strategy transformations.
 func QuoteName(v string) string {
 	pos := strings.IndexByte(v, NameQuoteRune)
 	if pos == -1 {

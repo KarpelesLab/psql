@@ -6,8 +6,10 @@ import (
 	"reflect"
 )
 
+// HasChanged returns true if the object has been modified since it was last loaded
+// from or saved to the database. It compares current field values against the stored
+// state from the last scan.
 func HasChanged[T any](obj *T) bool {
-	// report if object has been updated
 	return Table[T]().HasChanged(obj)
 }
 

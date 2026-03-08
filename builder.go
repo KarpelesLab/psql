@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+// EscapeValueable is implemented by types that can render themselves as SQL expressions.
+// Used by the query builder for WHERE conditions, field references, and values.
 type EscapeValueable interface {
 	EscapeValue() string
 }
@@ -27,6 +29,15 @@ type EscapeTableable interface {
 	EscapeTable() string
 }
 
+// QueryBuilder constructs SQL queries using a fluent API. Create one with [B], then
+// chain methods to build SELECT, INSERT, UPDATE, DELETE, or REPLACE queries.
+// Execute with [QueryBuilder.RunQuery], [QueryBuilder.ExecQuery], or [QueryBuilder.Render].
+//
+//	rows, err := psql.B().Select("id", "name").From("users").
+//	    Where(map[string]any{"active": true}).
+//	    OrderBy(psql.S("name", "ASC")).
+//	    Limit(10).
+//	    RunQuery(ctx)
 type QueryBuilder struct {
 	Query       string
 	Fields      []any
@@ -49,10 +60,17 @@ type QueryBuilder struct {
 	err error
 }
 
+// B creates a new empty [QueryBuilder]. Chain methods to build a query:
+//
+//	psql.B().Select("*").From("users").Where(...)
+//	psql.B().Update("users").Set(...).Where(...)
+//	psql.B().Delete().From("users").Where(...)
 func B() *QueryBuilder {
 	return new(QueryBuilder)
 }
 
+// Select sets the query type to SELECT and specifies the fields to retrieve.
+// String arguments are treated as field names. Pass no arguments to select all (*).
 func (q *QueryBuilder) Select(fields ...any) *QueryBuilder {
 	q.Query = "SELECT"
 	if len(fields) > 0 {
@@ -77,6 +95,7 @@ func (q *QueryBuilder) errorf(msg string, arg ...any) {
 	q.err = fmt.Errorf(msg, arg...)
 }
 
+// AlsoSelect adds additional fields to an existing SELECT query.
 func (q *QueryBuilder) AlsoSelect(fields ...any) *QueryBuilder {
 	if q.Query != "SELECT" {
 		q.err = errors.New("invalid QueryBuilder operation")
@@ -85,37 +104,45 @@ func (q *QueryBuilder) AlsoSelect(fields ...any) *QueryBuilder {
 	return q
 }
 
+// Update sets the query type to UPDATE and specifies the target table.
+// Use [QueryBuilder.Set] to specify the fields to update.
 func (q *QueryBuilder) Update(table any) *QueryBuilder {
 	q.Query = "UPDATE"
 	return q.Table(table)
 }
 
+// Replace sets the query type to REPLACE (MySQL) or equivalent upsert.
 func (q *QueryBuilder) Replace(table EscapeTableable) *QueryBuilder {
 	q.Query = "REPLACE"
 	q.Tables = append(q.Tables, table)
 	return q
 }
 
+// Delete sets the query type to DELETE. Use [QueryBuilder.From] to specify the table.
 func (q *QueryBuilder) Delete() *QueryBuilder {
 	q.Query = "DELETE"
 	return q
 }
 
+// Insert sets the query type to INSERT and specifies the fields/values to insert.
 func (q *QueryBuilder) Insert(fields ...any) *QueryBuilder {
 	q.Query = "INSERT"
 	q.FieldsSet = append(q.FieldsSet, fields...)
 	return q
 }
 
+// Into specifies the target table for INSERT queries.
 func (q *QueryBuilder) Into(table EscapeTableable) *QueryBuilder {
 	q.Tables = append(q.Tables, table)
 	return q
 }
 
+// From specifies the source table. Accepts a string (table name) or [EscapeTableable].
 func (q *QueryBuilder) From(table any) *QueryBuilder {
 	return q.Table(table)
 }
 
+// Table adds a table to the query. Accepts a string or [EscapeTableable].
 func (q *QueryBuilder) Table(table any) *QueryBuilder {
 	switch v := table.(type) {
 	case EscapeTableable:
@@ -128,6 +155,9 @@ func (q *QueryBuilder) Table(table any) *QueryBuilder {
 	return q
 }
 
+// Limit sets the LIMIT clause. With one argument, limits the row count.
+// With two arguments, Limit(count, offset) renders as LIMIT count OFFSET offset
+// (PostgreSQL/SQLite) or LIMIT count, offset (MySQL).
 func (q *QueryBuilder) Limit(v ...int) *QueryBuilder {
 	switch len(v) {
 	case 0:
@@ -141,16 +171,23 @@ func (q *QueryBuilder) Limit(v ...int) *QueryBuilder {
 	}
 }
 
+// Set specifies the fields to update in UPDATE or INSERT queries.
+// Typically pass a map[string]any: Set(map[string]any{"name": "Alice"}).
 func (q *QueryBuilder) Set(fields ...any) *QueryBuilder {
 	q.FieldsSet = append(q.FieldsSet, fields...)
 	return q
 }
 
+// Where adds conditions to the WHERE clause. Accepts map[string]any for equality
+// conditions, [EscapeValueable] for comparisons (e.g., [Equal], [Gt], [Like]),
+// or multiple arguments which are joined with AND.
 func (q *QueryBuilder) Where(where ...any) *QueryBuilder {
 	q.WhereData = append(q.WhereData, where...)
 	return q
 }
 
+// OrderBy adds ORDER BY clauses. Use [S] to create sort fields:
+// OrderBy(psql.S("name", "ASC"), psql.S("created_at", "DESC"))
 func (q *QueryBuilder) OrderBy(field ...SortValueable) *QueryBuilder {
 	q.OrderByData = append(q.OrderByData, field...)
 	return q
@@ -212,6 +249,8 @@ type joinClause struct {
 	condition []any
 }
 
+// Render generates the SQL query string for the current engine. Values are
+// embedded directly (not parameterized). For parameterized queries, use [QueryBuilder.RenderArgs].
 func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
 	// Generate the actual SQL query
 	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: false}
@@ -222,6 +261,8 @@ func (q *QueryBuilder) Render(ctx context.Context) (string, error) {
 	return strings.Join(rctx.req, " "), nil
 }
 
+// RenderArgs generates the SQL query string with parameterized placeholders and
+// returns the arguments separately. Uses $1/$2/... for PostgreSQL and ? for MySQL/SQLite.
 func (q *QueryBuilder) RenderArgs(ctx context.Context) (string, []any, error) {
 	// Generate the actual SQL query
 	rctx := &renderContext{e: GetBackend(ctx).Engine(), useArgs: true}
@@ -232,6 +273,8 @@ func (q *QueryBuilder) RenderArgs(ctx context.Context) (string, []any, error) {
 	return strings.Join(rctx.req, " "), rctx.args, nil
 }
 
+// RunQuery executes the query and returns *sql.Rows for reading results.
+// The caller must close the returned rows. Typically used for SELECT queries.
 func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
 	query, args, err := q.RenderArgs(ctx)
 	if err != nil {
@@ -245,6 +288,8 @@ func (q *QueryBuilder) RunQuery(ctx context.Context) (*sql.Rows, error) {
 	return res, nil
 }
 
+// ExecQuery executes the query and returns sql.Result. Used for INSERT, UPDATE,
+// DELETE, and other non-row-returning queries.
 func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
 	query, args, err := q.RenderArgs(ctx)
 	if err != nil {
@@ -253,6 +298,8 @@ func (q *QueryBuilder) ExecQuery(ctx context.Context) (sql.Result, error) {
 	return ExecContext(ctx, query, args...)
 }
 
+// Prepare creates a prepared statement from the query. The caller must close
+// the returned statement.
 func (q *QueryBuilder) Prepare(ctx context.Context) (*sql.Stmt, error) {
 	query, _, err := q.RenderArgs(ctx)
 	if err != nil {

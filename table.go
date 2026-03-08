@@ -17,6 +17,8 @@ var (
 	tableMapL sync.RWMutex
 )
 
+// TableMeta holds the metadata for a registered table type T, including its fields,
+// keys, associations, and SQL column mappings. Obtain one via [Table].
 type TableMeta[T any] struct {
 	typ          reflect.Type
 	table        string // table name

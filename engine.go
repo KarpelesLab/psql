@@ -1,12 +1,13 @@
 package psql
 
+// Engine identifies the SQL database engine in use.
 type Engine int
 
 const (
-	EngineUnknown Engine = iota
-	EngineMySQL
-	EnginePostgreSQL
-	EngineSQLite
+	EngineUnknown    Engine = iota // Unknown or unset engine
+	EngineMySQL                    // MySQL / MariaDB
+	EnginePostgreSQL               // PostgreSQL / CockroachDB
+	EngineSQLite                   // SQLite (via modernc.org/sqlite)
 )
 
 func (e Engine) String() string {

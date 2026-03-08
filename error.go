@@ -8,6 +8,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+// Error wraps a SQL error with the query that caused it. It implements the
+// error and Unwrap interfaces for use with errors.Is and errors.As.
 type Error struct {
 	Query string
 	Err   error

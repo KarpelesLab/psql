@@ -7,15 +7,10 @@ import (
 	"strconv"
 )
 
-// Update is a short way to insert objects into database
-//
-// psql.Update(ctx, obj)
-//
-// Is equivalent to:
-//
-// psql.Table(obj).Update(ctx, obj)
-//
-// All passed objects must be of the same type
+// Update saves changes to existing database records. Only fields that have changed
+// since the last load are updated (if the object was previously fetched). Fires
+// [BeforeSaveHook], [BeforeUpdateHook], [AfterUpdateHook], and [AfterSaveHook] if
+// implemented. All passed objects must be of the same type.
 func Update[T any](ctx context.Context, target ...*T) error {
 	if len(target) == 0 {
 		return nil

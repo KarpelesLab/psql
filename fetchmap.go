@@ -7,6 +7,9 @@ import (
 	"log/slog"
 )
 
+// FetchMapped fetches records and returns them as a map keyed by the string
+// representation of the given column. Each key maps to a single record (last wins
+// if duplicates exist).
 func FetchMapped[T any](ctx context.Context, where any, key string, opts ...*FetchOptions) (map[string]*T, error) {
 	return Table[T]().FetchMapped(ctx, where, key, opts...)
 }
@@ -66,6 +69,8 @@ func (t *TableMeta[T]) FetchMapped(ctx context.Context, where any, key string, o
 	return final, nil
 }
 
+// FetchGrouped fetches records and returns them grouped by the string
+// representation of the given column. Each key maps to a slice of matching records.
 func FetchGrouped[T any](ctx context.Context, where map[string]any, key string, opts ...*FetchOptions) (map[string][]*T, error) {
 	return Table[T]().FetchGrouped(ctx, where, key, opts...)
 }

@@ -16,6 +16,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Backend represents a database connection with engine-specific behavior.
+// Create one with [New], [NewMySQL], [NewPG], or [NewSQLite], then attach
+// it to a context with [Backend.Plug] or [ContextBackend].
 type Backend struct {
 	db        *sql.DB       // db backend, always set
 	pgdb      *pgxpool.Pool // pgx backend, if any
@@ -25,7 +28,14 @@ type Backend struct {
 	namer     Namer // custom namer for table/column names
 }
 
-// New returns a Backend that connects to the provided database
+// New returns a [Backend] that connects to the database identified by dsn.
+// The engine is auto-detected from the DSN format:
+//
+//   - PostgreSQL/CockroachDB: "postgresql://user:pass@host:port/dbname"
+//   - MySQL: "user:pass@tcp(host:port)/dbname" (go-sql-driver/mysql format)
+//   - SQLite: "sqlite:path/to/file", "file:path", ":memory:", or any path ending in .db/.sqlite/.sqlite3
+//
+// For engine-specific configuration, use [NewMySQL], [NewPG], or [NewSQLite] directly.
 func New(dsn string) (*Backend, error) {
 	if strings.HasPrefix(dsn, "postgresql://") {
 		cfg, err := pgxpool.ParseConfig(dsn)
@@ -44,6 +54,9 @@ func New(dsn string) (*Backend, error) {
 	return NewMySQL(cfg)
 }
 
+// NewMySQL creates a [Backend] connected to a MySQL database using the given
+// mysql.Config. It sets ANSI SQL mode with NO_BACKSLASH_ESCAPES and configures
+// connection pooling (128 max open, 32 max idle, 3 min lifetime).
 func NewMySQL(cfg *mysql.Config) (*Backend, error) {
 	cfg.Params = map[string]string{
 		"charset":  "utf8mb4",
@@ -83,6 +96,9 @@ func NewMySQL(cfg *mysql.Config) (*Backend, error) {
 	return b, nil
 }
 
+// NewPG creates a [Backend] connected to a PostgreSQL (or CockroachDB) database
+// using the given pgxpool.Config. It configures connection pooling (128 max open,
+// 32 max idle, 3 min lifetime).
 func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 	pgdb, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
@@ -102,6 +118,10 @@ func NewPG(cfg *pgxpool.Config) (*Backend, error) {
 	return b, nil
 }
 
+// NewSQLite creates a [Backend] connected to a SQLite database at the given path.
+// Pass ":memory:" for an in-memory database. WAL mode and foreign keys are
+// enabled automatically. The connection is limited to 1 open connection since
+// SQLite does not handle concurrent writes.
 func NewSQLite(dsn string) (*Backend, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -130,10 +150,13 @@ func NewSQLite(dsn string) (*Backend, error) {
 	return b, nil
 }
 
+// Plug attaches this backend to the given context. All psql operations using
+// the returned context will use this backend. Equivalent to [ContextBackend].
 func (be *Backend) Plug(ctx context.Context) context.Context {
 	return ContextBackend(ctx, be)
 }
 
+// DB returns the underlying *sql.DB connection. Panics if the backend is nil.
 func (be *Backend) DB() *sql.DB {
 	if be == nil {
 		panic("attempting to perform DB operations without backend")
@@ -141,6 +164,7 @@ func (be *Backend) DB() *sql.DB {
 	return be.db
 }
 
+// Engine returns the database engine type ([EngineMySQL], [EnginePostgreSQL], or [EngineSQLite]).
 func (be *Backend) Engine() Engine {
 	if be == nil {
 		return EngineUnknown

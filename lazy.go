@@ -7,6 +7,9 @@ import (
 	"github.com/KarpelesLab/pjson"
 )
 
+// Future represents a lazily-loaded database record. Created by [Lazy], it defers
+// the actual database query until [Future.Resolve] is called. Concurrent Resolve
+// calls share the same result. Future also implements json.Marshaler.
 type Future[T any] struct {
 	col   string
 	val   string

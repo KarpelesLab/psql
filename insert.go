@@ -107,6 +107,9 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 	return nil
 }
 
+// InsertIgnore inserts records, silently ignoring conflicts (e.g., duplicate keys).
+// On PostgreSQL this uses ON CONFLICT DO NOTHING, on MySQL INSERT IGNORE, on SQLite
+// INSERT OR IGNORE. Hooks are called the same as [Insert].
 func InsertIgnore[T any](ctx context.Context, target ...*T) error {
 	if len(target) == 0 {
 		return nil

@@ -4,6 +4,8 @@ import (
 	"strings"
 )
 
+// FindInSet represents a MySQL FIND_IN_SET() function call, which searches for
+// a string value within a comma-separated list stored in a column.
 type FindInSet struct {
 	Field any
 	Value string

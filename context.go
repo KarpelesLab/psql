@@ -27,18 +27,24 @@ func (c *ctxValueObj) Value(v any) any {
 	return c.Context.Value(v)
 }
 
+// ContextBackend attaches a [Backend] to the context. All psql operations using
+// the returned context will use this backend.
 func ContextBackend(ctx context.Context, be *Backend) context.Context {
 	return &ctxValueObj{ctx, be}
 }
 
+// ContextDB attaches a *sql.DB to the context, causing queries to use it directly.
 func ContextDB(ctx context.Context, db *sql.DB) context.Context {
 	return &ctxValueObj{ctx, db}
 }
 
+// ContextConn attaches a *sql.Conn to the context, pinning queries to a single connection.
 func ContextConn(ctx context.Context, conn *sql.Conn) context.Context {
 	return &ctxValueObj{ctx, conn}
 }
 
+// ContextTx attaches a [TxProxy] transaction to the context. All queries using the
+// returned context will execute within this transaction.
 func ContextTx(ctx context.Context, tx *TxProxy) context.Context {
 	return &ctxValueObj{ctx, tx}
 }
@@ -59,6 +65,9 @@ func Tx(ctx context.Context, cb func(ctx context.Context) error) error {
 	return err
 }
 
+// BeginTx starts a new transaction. If the context already contains a transaction,
+// a nested transaction is created using a SQL savepoint. Use [ContextTx] to attach
+// the returned [TxProxy] to a context for use with psql operations.
 func BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxProxy, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {
@@ -127,6 +136,8 @@ func GetBackend(ctx context.Context) *Backend {
 	}
 }
 
+// ExecContext executes a query (INSERT, UPDATE, DELETE, etc.) using whatever database
+// object is attached to the context (transaction, connection, or backend).
 func ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	obj := ctx.Value(ctxDataObj)
 	if obj == nil {

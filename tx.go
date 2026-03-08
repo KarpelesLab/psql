@@ -8,6 +8,11 @@ import (
 	"sync/atomic"
 )
 
+// TxProxy wraps a *sql.Tx with support for nested transactions via SQL savepoints.
+// Create one with [BeginTx] or [Tx]. Calling [TxProxy.BeginTx] on an existing
+// TxProxy creates a savepoint instead of a new transaction. Commit releases the
+// savepoint (or commits the real transaction at depth 0), and Rollback rolls back
+// to the savepoint (or the full transaction at depth 0).
 type TxProxy struct {
 	*sql.Tx
 	ctrl  *txController

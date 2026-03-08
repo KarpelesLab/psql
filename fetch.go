@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+// FetchOptions controls the behavior of Fetch, Get, FetchOne, and related operations.
+// Use helper constructors [Sort], [Limit], [LimitFrom], [WithPreload], and [FetchLock]
+// to create options, or combine multiple options by passing them as variadic arguments.
 type FetchOptions struct {
 	Lock       bool
 	LimitCount int             // number of results to return if >0
@@ -15,14 +18,19 @@ type FetchOptions struct {
 	Preload    []string        // association fields to preload after fetching
 }
 
+// Sort returns a [FetchOptions] that orders results by the given fields.
+// Use [S] to create sort fields: psql.Sort(psql.S("Name", "ASC"))
 func Sort(fields ...SortValueable) *FetchOptions {
 	return &FetchOptions{Sort: fields}
 }
 
+// Limit returns a [FetchOptions] that limits the number of results returned.
 func Limit(cnt int) *FetchOptions {
 	return &FetchOptions{LimitCount: cnt}
 }
 
+// LimitFrom returns a [FetchOptions] with both an offset (start) and a limit (cnt).
+// Equivalent to LIMIT cnt OFFSET start in PostgreSQL/SQLite, or LIMIT start, cnt in MySQL.
 func LimitFrom(start, cnt int) *FetchOptions {
 	return &FetchOptions{
 		LimitCount: cnt,
@@ -30,6 +38,7 @@ func LimitFrom(start, cnt int) *FetchOptions {
 	}
 }
 
+// FetchLock is a [FetchOptions] that adds SELECT ... FOR UPDATE to lock the selected rows.
 var FetchLock = &FetchOptions{Lock: true}
 
 func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
@@ -54,6 +63,9 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 	return res
 }
 
+// FetchOne loads a single record into target. Unlike [Get], it does not allocate a new
+// object; instead it scans into the provided pointer. Returns [os.ErrNotExist] if no
+// record matches.
 func FetchOne[T any](ctx context.Context, target *T, where any, opts ...*FetchOptions) error {
 	return Table[T]().FetchOne(ctx, target, where, opts...)
 }
@@ -63,10 +75,18 @@ func Get[T any](ctx context.Context, where any, opts ...*FetchOptions) (*T, erro
 	return Table[T]().Get(ctx, where, opts...)
 }
 
+// Fetch returns all records matching the where clause. Pass nil for where to fetch all
+// records. Use [FetchOptions] to control sorting, limits, and preloading.
 func Fetch[T any](ctx context.Context, where any, opts ...*FetchOptions) ([]*T, error) {
 	return Table[T]().Fetch(ctx, where, opts...)
 }
 
+// Iter returns a Go 1.23 iterator function that yields records one at a time.
+// This is more memory-efficient than [Fetch] for large result sets since rows
+// are scanned lazily. Use with range:
+//
+//	iter, err := psql.Iter[User](ctx, nil)
+//	for user := range iter { ... }
 func Iter[T any](ctx context.Context, where any, opts ...*FetchOptions) (func(func(v *T) bool), error) {
 	return Table[T]().Iter(ctx, where, opts...)
 }
