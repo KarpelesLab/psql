@@ -553,7 +553,9 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 	case 2:
 		ctx.append(ctx.d.LimitOffset(q.LimitData[0], q.LimitData[1]))
 	}
-	if q.ForUpdate {
+	if q.ForUpdate && ctx.e != EngineSQLite {
+		// SQLite uses file/WAL-level locking, so FOR UPDATE is silently
+		// omitted — users shouldn't need to worry about the engine.
 		ctx.append("FOR UPDATE")
 		if q.SkipLocked {
 			ctx.append("SKIP LOCKED")
