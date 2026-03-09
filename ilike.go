@@ -7,6 +7,10 @@ import (
 // ILike represents a case-insensitive SQL LIKE condition. On PostgreSQL it renders
 // as ILIKE, on MySQL it renders as LIKE (case-insensitive by default collation),
 // and on SQLite it uses LIKE with COLLATE NOCASE.
+//
+// Deprecated: Use [Like] with CaseInsensitive set to true instead:
+//
+//	&psql.Like{Field: psql.F("name"), Like: "john%", CaseInsensitive: true}
 type ILike struct {
 	Field any
 	Like  string
@@ -42,4 +46,11 @@ func (l *ILike) escapeValueCtx(ctx *renderContext) string {
 	b.WriteString(suffix)
 
 	return b.String()
+}
+
+// CILike creates a case-insensitive [Like] condition:
+//
+//	psql.CILike(psql.F("name"), "john%")
+func CILike(field any, pattern string) *Like {
+	return &Like{Field: field, Like: pattern, CaseInsensitive: true}
 }

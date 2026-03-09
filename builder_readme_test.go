@@ -59,7 +59,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 		assert.Equal(t, `SELECT * FROM "users" WHERE ("age">=18)`, sql)
 
 		// LIKE operator
-		query = psql.B().Select().From("users").Where(&psql.Like{psql.F("name"), "John%"})
+		query = psql.B().Select().From("users").Where(&psql.Like{Field: psql.F("name"), Like: "John%"})
 		sql, err = query.Render(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT * FROM "users" WHERE ("name" LIKE 'John%' ESCAPE '\')`, sql)
@@ -216,7 +216,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 			From("products").
 			Where(map[string]any{
 				"status":      "available",
-				"name":        &psql.Like{psql.F("name"), "%" + searchTerm + "%"},
+				"name":        &psql.Like{Field: psql.F("name"), Like: "%" + searchTerm + "%"},
 				"category_id": psql.WhereOR{1, 2, 3},
 			}).
 			OrderBy(psql.S("price", "ASC"))

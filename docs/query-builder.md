@@ -59,8 +59,9 @@ psql.Gt(psql.F("age"), 18)                // age > 18
 psql.Gte(psql.F("age"), 18)               // age >= 18
 psql.Between(psql.F("age"), 18, 65)       // age BETWEEN 18 AND 65
 &psql.Not{V: value}                        // negation (!=, IS NOT NULL, NOT LIKE)
-&psql.Like{psql.F("name"), "John%"}       // name LIKE 'John%'
-&psql.ILike{psql.F("name"), "john%"}      // ILIKE on PostgreSQL, LIKE COLLATE NOCASE on SQLite
+&psql.Like{Field: psql.F("name"), Like: "John%"}                          // name LIKE 'John%'
+&psql.Like{Field: psql.F("name"), Like: "john%", CaseInsensitive: true}   // ILIKE on PG, COLLATE NOCASE on SQLite
+psql.CILike(psql.F("name"), "john%")                                      // shorthand for case-insensitive Like
 ```
 
 ### Multiple Conditions
@@ -298,7 +299,7 @@ search := psql.B().
     From("products").
     Where(map[string]any{
         "status":      "available",
-        "name":        &psql.ILike{psql.F("name"), "%" + searchTerm + "%"},
+        "name":        psql.CILike(psql.F("name"), "%" + searchTerm + "%"),
         "category_id": psql.WhereOR{1, 2, 3},
     }).
     OrderBy(psql.S("price", "ASC"))

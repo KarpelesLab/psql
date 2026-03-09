@@ -6,10 +6,15 @@ import (
 
 // Like represents a SQL LIKE condition. Use in WHERE clauses:
 //
-//	psql.B().Select().From("users").Where(&psql.Like{psql.F("name"), "John%"})
+//	psql.B().Select().From("users").Where(&psql.Like{Field: psql.F("name"), Like: "John%"})
+//
+// Set CaseInsensitive to true for case-insensitive matching. This renders as
+// ILIKE on PostgreSQL, LIKE on MySQL (case-insensitive by default collation),
+// and LIKE with COLLATE NOCASE on SQLite.
 type Like struct {
-	Field any
-	Like  string
+	Field           any
+	Like            string
+	CaseInsensitive bool
 }
 
 func (l *Like) String() string {
@@ -17,23 +22,30 @@ func (l *Like) String() string {
 }
 
 func (l *Like) EscapeValue() string {
-	// We enforce NO_BACKSLASH_ESCAPES
-	b := &strings.Builder{}
-	b.WriteString(Escape(l.Field))
-	b.WriteString(" LIKE ")
-	b.WriteString(Escape(l.Like))
-	b.WriteString(" ESCAPE '\\'")
-
-	return b.String()
+	return l.escapeValueCtx(nil)
 }
 
 func (l *Like) escapeValueCtx(ctx *renderContext) string {
-	// We enforce NO_BACKSLASH_ESCAPES
 	b := &strings.Builder{}
 	b.WriteString(escapeCtx(ctx, l.Field))
-	b.WriteString(" LIKE ")
+
+	keyword := "LIKE"
+	suffix := " ESCAPE '\\'"
+
+	if l.CaseInsensitive && ctx != nil {
+		switch ctx.e {
+		case EnginePostgreSQL:
+			keyword = "ILIKE"
+		case EngineSQLite:
+			suffix = " ESCAPE '\\' COLLATE NOCASE"
+		}
+	}
+
+	b.WriteByte(' ')
+	b.WriteString(keyword)
+	b.WriteByte(' ')
 	b.WriteString(escapeCtx(ctx, l.Like))
-	b.WriteString(" ESCAPE '\\'")
+	b.WriteString(suffix)
 
 	return b.String()
 }
