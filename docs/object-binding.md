@@ -220,6 +220,18 @@ users, err := psql.Fetch[User](ctx, nil, psql.Sort(psql.S("Name", "ASC")))
 // Lock rows (SELECT FOR UPDATE)
 users, err := psql.Fetch[User](ctx, nil, psql.FetchLock)
 
+// FOR UPDATE SKIP LOCKED (skip rows locked by other transactions)
+users, err := psql.Fetch[User](ctx, nil, psql.FetchLockSkipLocked)
+
+// FOR UPDATE NOWAIT (fail immediately if rows are locked)
+users, err := psql.Fetch[User](ctx, nil, psql.FetchLockNoWait)
+
+// Include soft-deleted records
+users, err := psql.Fetch[User](ctx, nil, psql.IncludeDeleted())
+
+// Apply reusable scopes
+users, err := psql.Fetch[User](ctx, nil, psql.WithScope(Active))
+
 // Combine options
 users, err := psql.Fetch[User](ctx,
     map[string]any{"Age": 30},

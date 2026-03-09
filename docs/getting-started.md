@@ -6,39 +6,62 @@
 go get github.com/KarpelesLab/psql
 ```
 
+Then install the driver submodule for your database:
+
+```bash
+go get github.com/KarpelesLab/psql/mysql   # MySQL / MariaDB
+go get github.com/KarpelesLab/psql/pgsql   # PostgreSQL / CockroachDB
+go get github.com/KarpelesLab/psql/sqlite  # SQLite
+```
+
 Requires Go 1.23 or later.
 
 ## Connecting to a Database
 
-Use `psql.New()` with a DSN string. The engine is auto-detected from the DSN format:
+Import the driver with a blank identifier, then use `psql.New()` with a DSN string. The engine is auto-detected from the DSN format:
 
 ```go
-// PostgreSQL / CockroachDB
+import (
+    "github.com/KarpelesLab/psql"
+    _ "github.com/KarpelesLab/psql/pgsql"  // register PostgreSQL driver
+)
+
 be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")
-
-// MySQL
-be, err := psql.New("user:pass@tcp(localhost:3306)/mydb")
-
-// SQLite
-be, err := psql.New("sqlite:mydata.db")
-be, err := psql.New(":memory:")        // in-memory database
-be, err := psql.New("file:test.db")    // file URI
-be, err := psql.New("data.sqlite3")    // detected by extension
 ```
 
-You can also use engine-specific constructors:
+### DSN Formats
 
 ```go
-// MySQL with custom config
+import _ "github.com/KarpelesLab/psql/pgsql"
+be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")  // PostgreSQL
+be, err := psql.New("postgres://user:pass@localhost:5432/mydb")    // also PostgreSQL
+
+import _ "github.com/KarpelesLab/psql/mysql"
+be, err := psql.New("user:pass@tcp(localhost:3306)/mydb")          // MySQL
+
+import _ "github.com/KarpelesLab/psql/sqlite"
+be, err := psql.New(":memory:")           // SQLite in-memory
+be, err := psql.New("sqlite:mydata.db")   // SQLite file
+be, err := psql.New("file:test.db")       // SQLite file URI
+be, err := psql.New("data.sqlite3")       // detected by extension
+```
+
+### Engine-Specific Constructors
+
+Each submodule also exports a `New` function for engine-specific configuration:
+
+```go
+import psqlmysql "github.com/KarpelesLab/psql/mysql"
+
 cfg, _ := mysql.ParseDSN("user:pass@tcp(localhost:3306)/mydb")
-be, err := psql.NewMySQL(cfg)
+be, err := psqlmysql.New(cfg)
+```
 
-// PostgreSQL with pgxpool config
+```go
+import psqlpg "github.com/KarpelesLab/psql/pgsql"
+
 cfg, _ := pgxpool.ParseConfig("postgresql://...")
-be, err := psql.NewPG(cfg)
-
-// SQLite
-be, err := psql.NewSQLite("mydata.db")
+be, err := psqlpg.New(cfg)
 ```
 
 ## Attaching to Context
@@ -88,21 +111,41 @@ err = psql.Update(ctx, user)
 // Replace (upsert)
 err = psql.Replace(ctx, &User{ID: 1, Email: "alice@new.com", Name: "Alice", Age: 31})
 
+// InsertIgnore (skip on conflict)
+err = psql.InsertIgnore(ctx, &User{ID: 1, Name: "Alice"})
+
 // Delete
 _, err = psql.Delete[User](ctx, map[string]any{"ID": uint64(1)})
 
 // Count
 count, err := psql.Count[User](ctx, map[string]any{"Age": 30})
+
+// HasChanged (detect modifications since last load)
+changed := psql.HasChanged(user)
+```
+
+## Error Helpers
+
+```go
+// Check for duplicate key violations (works across all engines)
+if psql.IsDuplicate(err) {
+    // unique constraint violated
+}
+
+// Check for missing table/column errors
+if psql.IsNotExist(err) {
+    // table or column doesn't exist
+}
 ```
 
 ## Supported Engines
 
-| Engine | Status | Notes |
-|--------|--------|-------|
-| MySQL | Full support | Default engine for plain DSN strings |
-| PostgreSQL | Full support | Auto-detected by `postgresql://` prefix |
-| CockroachDB | Full support | Uses PostgreSQL driver, compatible with PostgreSQL engine |
-| SQLite | Full support | Auto-detected by file extension or `sqlite:` prefix |
+| Engine | Driver Submodule | DSN Prefix |
+|--------|-----------------|------------|
+| MySQL / MariaDB | `psql/mysql` | `user:pass@tcp(...)` |
+| PostgreSQL | `psql/pgsql` | `postgresql://` or `postgres://` |
+| CockroachDB | `psql/pgsql` | `postgresql://` (uses PostgreSQL driver) |
+| SQLite | `psql/sqlite` | `:memory:`, `sqlite:`, file extension |
 
 ## Next Steps
 
@@ -112,4 +155,6 @@ count, err := psql.Count[User](ctx, map[string]any{"Age": 30})
 - [Query Builder](query-builder.md) - Building complex SQL queries
 - [Transactions](transactions.md) - Transaction support
 - [Vectors](vectors.md) - Vector similarity search
+- [Scopes & Lazy](scopes-lazy.md) - Reusable query modifiers and lazy loading
+- [Soft Delete](soft-delete.md) - Automatic soft delete
 - [Naming Strategies](naming-strategies.md) - Customizing table/column names

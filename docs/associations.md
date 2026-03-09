@@ -65,15 +65,44 @@ type Author struct {
 
 **Important**: `has_many` fields must be slice types (e.g., `[]*Book`).
 
+### many_to_many
+
+Two models are related through a join table.
+
+```go
+type Student struct {
+    psql.Name `sql:"students"`
+    ID        int64      `sql:",key=PRIMARY"`
+    Name      string     `sql:",type=VARCHAR,size=128"`
+    Courses   []*Course  `psql:"many_to_many:student_courses,student_id,course_id"`
+}
+
+type Course struct {
+    psql.Name `sql:"courses"`
+    ID        int64  `sql:",key=PRIMARY"`
+    Title     string `sql:",type=VARCHAR,size=256"`
+}
+```
+
+The tag format is `many_to_many:JoinTable,FK,OtherFK`:
+- `JoinTable`: the name of the join/junction table
+- `FK`: the column in the join table referencing the parent's primary key
+- `OtherFK`: the column in the join table referencing the target's primary key
+
+The join table (`student_courses` here) must exist in the database with at least the two FK columns. psql does not auto-create join tables.
+
+**Important**: `many_to_many` fields must be slice types.
+
 ## Tag Format
 
 Association tags use the `psql` struct tag (not `sql`):
 
 ```
 psql:"<kind>:<ForeignKey>"
+psql:"many_to_many:<JoinTable>,<FK>,<OtherFK>"
 ```
 
-- `kind`: `belongs_to`, `has_one`, or `has_many`
+- `kind`: `belongs_to`, `has_one`, `has_many`, or `many_to_many`
 - `ForeignKey`: The column name (or Go field name) of the foreign key
 
 Association fields are excluded from the database schema -- they exist only in Go for loading related data.
@@ -127,6 +156,8 @@ Preloading is implemented as efficient batch loading using `IN` queries:
 
 This avoids the N+1 query problem. For example, loading 100 books and their authors only takes 2 queries (one for books, one for all referenced authors), not 101.
 
+For `many_to_many`, preloading performs two queries: one on the join table to collect pairs, then one on the target table to load the actual records.
+
 ## Important Notes
 
 ### Table Registration
@@ -146,11 +177,13 @@ Registration happens automatically when you first use a type with any psql opera
 - **belongs_to**: If the FK value doesn't match any parent record, the field remains `nil`.
 - **has_one**: If no related child record exists, the field remains `nil`.
 - **has_many**: If no related child records exist, the slice remains `nil` (not an empty slice).
+- **many_to_many**: If no related records exist, the slice remains `nil`.
 
 ### Primary Key Requirement
 
 - `belongs_to` requires the target type to have a single-column primary key.
 - `has_one` and `has_many` require the parent type to have a single-column primary key.
+- `many_to_many` requires both parent and target types to have single-column primary keys.
 
 ### Empty Targets
 

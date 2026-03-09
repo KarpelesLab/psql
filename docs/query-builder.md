@@ -60,6 +60,7 @@ psql.Gte(psql.F("age"), 18)               // age >= 18
 psql.Between(psql.F("age"), 18, 65)       // age BETWEEN 18 AND 65
 &psql.Not{V: value}                        // negation (!=, IS NOT NULL, NOT LIKE)
 &psql.Like{psql.F("name"), "John%"}       // name LIKE 'John%'
+&psql.ILike{psql.F("name"), "john%"}      // ILIKE on PostgreSQL, LIKE COLLATE NOCASE on SQLite
 ```
 
 ### Multiple Conditions
@@ -70,6 +71,32 @@ query := psql.B().Select().From("users").Where(
     psql.Equal(psql.F("status"), "active"),
     psql.Gte(psql.F("age"), 18),
 )
+```
+
+### Subqueries
+
+Use `SubIn` for IN (subquery) conditions:
+
+```go
+// WHERE "id" IN (SELECT "user_id" FROM "orders")
+query := psql.B().Select().From("users").Where(map[string]any{
+    "id": &psql.SubIn{Sub: psql.B().Select("user_id").From("orders")},
+})
+
+// NOT IN subquery
+query := psql.B().Select().From("users").Where(map[string]any{
+    "id": &psql.Not{V: &psql.SubIn{Sub: psql.B().Select("user_id").From("banned")}},
+})
+```
+
+### Any (PostgreSQL-Optimized Array Comparison)
+
+On PostgreSQL with parameterized queries, `Any` uses `= ANY($N)` passing the slice as a single array parameter. On MySQL/SQLite it expands to `IN(...)`:
+
+```go
+query := psql.B().Select().From("users").Where(map[string]any{
+    "id": &psql.Any{Values: []int64{1, 2, 3}},
+})
 ```
 
 ## ORDER BY and LIMIT
@@ -129,6 +156,78 @@ query := psql.B().Select("name").From("users").SetDistinct()
 // SELECT DISTINCT "name" FROM "users"
 ```
 
+## FOR UPDATE
+
+```go
+query := psql.B().Select().From("users").Where(...).SetForUpdate()
+// SELECT ... FOR UPDATE
+
+query := psql.B().Select().From("users").Where(...).SetSkipLocked()
+// SELECT ... FOR UPDATE SKIP LOCKED
+
+query := psql.B().Select().From("users").Where(...).SetNoWait()
+// SELECT ... FOR UPDATE NOWAIT
+```
+
+FOR UPDATE is silently omitted on SQLite (which uses file/WAL-level locking).
+
+## ON CONFLICT (Upsert)
+
+```go
+// INSERT ... ON CONFLICT DO NOTHING
+query := psql.B().Insert().Into("users").
+    Set(map[string]any{"id": 1, "name": "Alice"}).
+    DoNothing()
+
+// INSERT ... ON CONFLICT (id) DO UPDATE SET name=...
+query := psql.B().Insert().Into("users").
+    Set(map[string]any{"id": 1, "name": "Alice"}).
+    OnConflict("id").
+    DoUpdate(map[string]any{"name": "Alice"})
+```
+
+## SET Expressions (UPDATE)
+
+### Increment / Decrement
+
+Atomically increment or decrement a field:
+
+```go
+psql.B().Update("counters").
+    Set(map[string]any{"views": psql.Incr(1)}).
+    Where(map[string]any{"id": 42})
+// UPDATE "counters" SET "views"="views"+1 WHERE "id"=42
+
+psql.B().Update("inventory").
+    Set(map[string]any{"stock": psql.Decr(1)}).
+    Where(map[string]any{"id": 42})
+// UPDATE "inventory" SET "stock"="stock"-1 WHERE "id"=42
+```
+
+### SetRaw
+
+Use raw SQL in a SET clause:
+
+```go
+psql.B().Update("users").
+    Set(map[string]any{"last_seen": &psql.SetRaw{SQL: "NOW()"}}).
+    Where(map[string]any{"id": 42})
+```
+
+## Scopes
+
+Apply reusable query modifiers:
+
+```go
+var Active psql.Scope = func(q *psql.QueryBuilder) *psql.QueryBuilder {
+    return q.Where(map[string]any{"Status": "active"})
+}
+
+query := psql.B().Select().From("users").Apply(Active)
+```
+
+See [Scopes & Lazy](scopes-lazy.md) for details.
+
 ## Raw SQL
 
 For queries that don't fit the builder, use `psql.Q()`:
@@ -158,6 +257,18 @@ stmt, err := query.Prepare(ctx)
 defer stmt.Close()
 ```
 
+### Typed Query Execution
+
+Scan query results directly into typed structs:
+
+```go
+// Scan all rows into []*User
+users, err := psql.RunQueryT[User](ctx, query)
+
+// Scan a single row into *User (returns os.ErrNotExist if no rows)
+user, err := psql.RunQueryTOne[User](ctx, query)
+```
+
 ## Complete Examples
 
 ```go
@@ -177,17 +288,17 @@ update := psql.B().
     Update("users").
     Set(map[string]any{
         "last_login":  time.Now(),
-        "login_count": psql.Raw("login_count + 1"),
+        "login_count": psql.Incr(1),
     }).
     Where(map[string]any{"id": userID})
 
-// Complex search
+// Complex search with case-insensitive matching
 search := psql.B().
     Select().
     From("products").
     Where(map[string]any{
         "status":      "available",
-        "name":        &psql.Like{psql.F("name"), "%" + searchTerm + "%"},
+        "name":        &psql.ILike{psql.F("name"), "%" + searchTerm + "%"},
         "category_id": psql.WhereOR{1, 2, 3},
     }).
     OrderBy(psql.S("price", "ASC"))
