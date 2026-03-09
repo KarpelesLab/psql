@@ -36,49 +36,49 @@ func TestIsDuplicateIntegration(t *testing.T) {
 	_ = psql.Q(`DROP TABLE IF EXISTS "test_dup"`).Exec(ctx)
 }
 
-// === ILike integration tests ===
+// === Case-insensitive Like integration tests ===
 
-type ILikeTable struct {
-	psql.Name `sql:"test_ilike"`
+type CILikeTable struct {
+	psql.Name `sql:"test_cilike"`
 	ID        int64  `sql:",key=PRIMARY"`
 	Label     string `sql:",type=VARCHAR,size=128"`
 }
 
-func TestILikeIntegration(t *testing.T) {
+func TestCILikeIntegration(t *testing.T) {
 	be := getTestBackend(t)
 	ctx := be.Plug(context.Background())
-	_ = psql.Q(`DROP TABLE IF EXISTS "test_ilike"`).Exec(ctx)
+	_ = psql.Q(`DROP TABLE IF EXISTS "test_cilike"`).Exec(ctx)
 
-	require.NoError(t, psql.Insert(ctx, &ILikeTable{ID: 1, Label: "Hello World"}))
-	require.NoError(t, psql.Insert(ctx, &ILikeTable{ID: 2, Label: "HELLO THERE"}))
-	require.NoError(t, psql.Insert(ctx, &ILikeTable{ID: 3, Label: "goodbye"}))
+	require.NoError(t, psql.Insert(ctx, &CILikeTable{ID: 1, Label: "Hello World"}))
+	require.NoError(t, psql.Insert(ctx, &CILikeTable{ID: 2, Label: "HELLO THERE"}))
+	require.NoError(t, psql.Insert(ctx, &CILikeTable{ID: 3, Label: "goodbye"}))
 
-	// ILike should match case-insensitively
-	results, err := psql.Fetch[ILikeTable](ctx, map[string]any{
-		"Label": psql.ILike{Like: "hello%"},
+	// CaseInsensitive Like should match case-insensitively
+	results, err := psql.Fetch[CILikeTable](ctx, map[string]any{
+		"Label": psql.Like{Like: "hello%", CaseInsensitive: true},
 	})
 	require.NoError(t, err)
-	assert.Len(t, results, 2, "ILike should match both 'Hello World' and 'HELLO THERE'")
+	assert.Len(t, results, 2, "CaseInsensitive Like should match both 'Hello World' and 'HELLO THERE'")
 
 	// Regular Like for comparison (may be case-sensitive on PG)
-	results, err = psql.Fetch[ILikeTable](ctx, map[string]any{
+	results, err = psql.Fetch[CILikeTable](ctx, map[string]any{
 		"Label": psql.Like{Like: "hello%"},
 	})
 	require.NoError(t, err)
 	// Result count depends on engine (PG: 0, MySQL: 2, SQLite: 2)
 	// Just verify no error
 
-	// NOT ILike
-	results, err = psql.Fetch[ILikeTable](ctx, map[string]any{
-		"Label": &psql.Not{V: psql.ILike{Like: "hello%"}},
+	// NOT case-insensitive Like
+	results, err = psql.Fetch[CILikeTable](ctx, map[string]any{
+		"Label": &psql.Not{V: psql.Like{Like: "hello%", CaseInsensitive: true}},
 	})
 	require.NoError(t, err)
-	assert.Len(t, results, 1, "NOT ILike should return only 'goodbye'")
+	assert.Len(t, results, 1, "NOT case-insensitive Like should return only 'goodbye'")
 	if len(results) > 0 {
 		assert.Equal(t, "goodbye", results[0].Label)
 	}
 
-	_ = psql.Q(`DROP TABLE IF EXISTS "test_ilike"`).Exec(ctx)
+	_ = psql.Q(`DROP TABLE IF EXISTS "test_cilike"`).Exec(ctx)
 }
 
 // === Typed slices IN() integration tests ===

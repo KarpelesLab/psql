@@ -189,27 +189,6 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(suffix)
 		return b.String()
-	case ILike:
-		// ignore Field, use engine-aware keyword
-		keyword := "LIKE"
-		suffix := " ESCAPE '\\'"
-		if ctx != nil {
-			switch ctx.e {
-			case EnginePostgreSQL:
-				keyword = "ILIKE"
-			case EngineSQLite:
-				suffix = " ESCAPE '\\' COLLATE NOCASE"
-			}
-		}
-		if not {
-			b.WriteString(" NOT")
-		}
-		b.WriteByte(' ')
-		b.WriteString(keyword)
-		b.WriteByte(' ')
-		b.WriteString(escapeCtx(ctx, v.Like))
-		b.WriteString(suffix)
-		return b.String()
 	case FindInSet:
 		// ignore Field
 		b = &bytes.Buffer{}

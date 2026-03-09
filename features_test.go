@@ -40,13 +40,13 @@ func TestIsDuplicate(t *testing.T) {
 	})
 }
 
-// === ILike tests ===
+// === CaseInsensitive Like tests ===
 
-func TestILike(t *testing.T) {
+func TestCaseInsensitiveLike(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("standalone EscapeValue", func(t *testing.T) {
-		il := &psql.ILike{Field: psql.F("name"), Like: "john%"}
+		il := &psql.Like{Field: psql.F("name"), Like: "john%", CaseInsensitive: true}
 		result := il.EscapeValue()
 		assert.Contains(t, result, `"name"`)
 		assert.Contains(t, result, "LIKE")
@@ -54,18 +54,26 @@ func TestILike(t *testing.T) {
 		assert.Contains(t, result, "ESCAPE '\\'")
 	})
 
+	t.Run("CILike helper", func(t *testing.T) {
+		il := psql.CILike(psql.F("name"), "john%")
+		result := il.EscapeValue()
+		assert.Contains(t, result, `"name"`)
+		assert.Contains(t, result, "LIKE")
+		assert.Contains(t, result, "'john%'")
+	})
+
 	t.Run("in WHERE clause", func(t *testing.T) {
 		query := psql.B().Select().From("users").
-			Where(map[string]any{"name": psql.ILike{Like: "john%"}})
+			Where(map[string]any{"name": psql.Like{Like: "john%", CaseInsensitive: true}})
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "LIKE")
 		assert.Contains(t, sql, "'john%'")
 	})
 
-	t.Run("NOT ILike", func(t *testing.T) {
+	t.Run("NOT case-insensitive Like", func(t *testing.T) {
 		query := psql.B().Select().From("users").
-			Where(map[string]any{"name": &psql.Not{V: psql.ILike{Like: "test%"}}})
+			Where(map[string]any{"name": &psql.Not{V: psql.Like{Like: "test%", CaseInsensitive: true}}})
 		sql, err := query.Render(ctx)
 		require.NoError(t, err)
 		assert.Contains(t, sql, "NOT LIKE")
