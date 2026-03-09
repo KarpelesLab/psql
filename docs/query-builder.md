@@ -59,9 +59,18 @@ psql.Gt(psql.F("age"), 18)                // age > 18
 psql.Gte(psql.F("age"), 18)               // age >= 18
 psql.Between(psql.F("age"), 18, 65)       // age BETWEEN 18 AND 65
 &psql.Not{V: value}                        // negation (!=, IS NOT NULL, NOT LIKE)
-&psql.Like{Field: psql.F("name"), Like: "John%"}                          // name LIKE 'John%'
-&psql.Like{Field: psql.F("name"), Like: "john%", CaseInsensitive: true}   // ILIKE on PG, COLLATE NOCASE on SQLite
-psql.CILike(psql.F("name"), "john%")                                      // shorthand for case-insensitive Like
+&psql.Like{Field: psql.F("name"), Like: "John%"}                          // standalone: name LIKE 'John%'
+&psql.Like{Field: psql.F("name"), Like: "john%", CaseInsensitive: true}   // standalone: case-insensitive
+psql.CILike(psql.F("name"), "john%")                                      // shorthand for above
+```
+
+When used as a map value, the `Field` is taken from the map key — omit it:
+
+```go
+Where(map[string]any{
+    "name": psql.Like{Like: "John%"},                          // LIKE
+    "name": psql.Like{Like: "john%", CaseInsensitive: true},   // case-insensitive LIKE
+})
 ```
 
 ### Multiple Conditions
@@ -299,7 +308,7 @@ search := psql.B().
     From("products").
     Where(map[string]any{
         "status":      "available",
-        "name":        psql.CILike(psql.F("name"), "%" + searchTerm + "%"),
+        "name":        psql.Like{Like: "%" + searchTerm + "%", CaseInsensitive: true},
         "category_id": psql.WhereOR{1, 2, 3},
     }).
     OrderBy(psql.S("price", "ASC"))

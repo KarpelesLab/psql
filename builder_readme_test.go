@@ -216,7 +216,7 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 			From("products").
 			Where(map[string]any{
 				"status":      "available",
-				"name":        &psql.Like{Field: psql.F("name"), Like: "%" + searchTerm + "%"},
+				"name":        psql.Like{Like: "%" + searchTerm + "%"},
 				"category_id": psql.WhereOR{1, 2, 3},
 			}).
 			OrderBy(psql.S("price", "ASC"))
