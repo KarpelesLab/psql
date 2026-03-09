@@ -144,7 +144,7 @@ func (f *Future[T]) resolve(ctx context.Context) {
 		fld := f.table.fldcol[f.col]
 		if fld != nil {
 			for _, r := range results {
-				key := fmt.Sprintf("%v", reflect.ValueOf(r).Elem().Field(fld.index).Interface())
+				key := fmt.Sprintf("%v", reflect.ValueOf(r).Elem().Field(fld.Index).Interface())
 				resultByVal[key] = r
 			}
 		}

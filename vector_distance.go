@@ -67,8 +67,12 @@ func (d *VectorDistance) EscapeValue() string {
 
 // escapeValueCtx renders the distance expression with engine-specific syntax.
 func (d *VectorDistance) escapeValueCtx(ctx *renderContext) string {
-	if ctx != nil && ctx.e == EnginePostgreSQL {
-		return d.renderPG(ctx)
+	if ctx != nil {
+		if vr, ok := ctx.d.(VectorRenderer); ok {
+			fieldExpr := escapeCtx(ctx, d.Field)
+			vecExpr := escapeCtx(ctx, d.Vec.String())
+			return vr.VectorDistanceExpr(fieldExpr, vecExpr, d.Op)
+		}
 	}
 	return d.renderFunc(ctx)
 }
@@ -81,24 +85,6 @@ func (d *VectorDistance) sortEscapeValue() string {
 // sortEscapeValueCtx implements sortValueCtxable for engine-aware ORDER BY rendering.
 func (d *VectorDistance) sortEscapeValueCtx(ctx *renderContext) string {
 	return d.escapeValueCtx(ctx)
-}
-
-// renderPG renders using PostgreSQL/CockroachDB operator syntax.
-func (d *VectorDistance) renderPG(ctx *renderContext) string {
-	b := &strings.Builder{}
-	b.WriteString(escapeCtx(ctx, d.Field))
-
-	switch d.Op {
-	case VectorL2:
-		b.WriteString(" <-> ")
-	case VectorCosine:
-		b.WriteString(" <=> ")
-	case VectorInnerProduct:
-		b.WriteString(" <#> ")
-	}
-
-	b.WriteString(escapeCtx(ctx, d.Vec.String()))
-	return b.String()
 }
 
 // renderFunc renders using function call syntax (fallback for non-PostgreSQL engines).

@@ -30,14 +30,12 @@ func (t *TableMeta[T]) HasChanged(obj *T) bool {
 
 	for _, col := range t.fields {
 		// grab state value
-		stv, ok := st.val[col.column]
+		stv, ok := st.val[col.Column]
 		if !ok {
 			// can't check because that column wasn't fetched → bad
-			//log.Printf("[psql] HasChanged can't check value for %s", col.column)
 			return true
 		}
-		if !reflect.DeepEqual(val.Field(col.index).Interface(), stv) {
-			//log.Printf("[psql] found diff in field %s: %v != %v", col.column, val.Field(col.index).Interface(), stv)
+		if !reflect.DeepEqual(val.Field(col.Index).Interface(), stv) {
 			return true
 		}
 	}

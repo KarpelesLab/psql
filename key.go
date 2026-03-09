@@ -27,108 +27,138 @@ func (k *Key) state() *rowState {
 	return k.st
 }
 
+// Key type constants for StructKey.Typ.
 const (
-	keyPrimary = iota + 1
-	keyUnique
-	keyIndex
-	keyFulltext
-	keySpatial
-	keyVector
+	KeyPrimary  = 1
+	KeyUnique   = 2
+	KeyIndex    = 3
+	KeyFulltext = 4
+	KeySpatial  = 5
+	KeyVector   = 6
 )
 
-type structKey struct {
-	index  int
-	name   string
-	key    string // key name, can be != name
-	typ    int
-	attrs  map[string]string
-	fields []string
+// StructKey holds metadata for a table key/index, including its type, column
+// list, and attributes.
+type StructKey struct {
+	Index  int
+	Name   string
+	Key    string // key name, can be != name
+	Typ    int
+	Attrs  map[string]string
+	Fields []string
 }
 
-func (k *structKey) loadAttrs(attrs map[string]string) {
-	k.typ = keyIndex // default value
+func (k *StructKey) loadAttrs(attrs map[string]string) {
+	k.Typ = KeyIndex // default value
 	if t, ok := attrs["type"]; ok {
 		switch strings.ToUpper(t) {
 		case "PRIMARY":
-			k.typ = keyPrimary
+			k.Typ = KeyPrimary
 		case "UNIQUE":
-			k.typ = keyUnique
+			k.Typ = KeyUnique
 		case "INDEX":
-			k.typ = keyIndex
+			k.Typ = KeyIndex
 		case "FULLTEXT":
-			k.typ = keyFulltext
+			k.Typ = KeyFulltext
 		case "SPATIAL":
-			k.typ = keySpatial
+			k.Typ = KeySpatial
 		case "VECTOR":
-			k.typ = keyVector
+			k.Typ = KeyVector
 		default:
-			slog.Warn(fmt.Sprintf("[psql] Unsupported index key type %s assumed as INDEX", t), "event", "psql:key:badkey", "psql.index", k.name)
+			slog.Warn(fmt.Sprintf("[psql] Unsupported index key type %s assumed as INDEX", t), "event", "psql:key:badkey", "psql.index", k.Name)
 		}
-	} else if k.key == "PRIMARY" {
-		k.typ = keyPrimary
+	} else if k.Key == "PRIMARY" {
+		k.Typ = KeyPrimary
 	}
-	k.attrs = attrs
-	k.fields = strings.Split(attrs["fields"], ",")
+	k.Attrs = attrs
+	k.Fields = strings.Split(attrs["fields"], ",")
 }
 
-func (k *structKey) loadKeyName(kn string) {
+func (k *StructKey) loadKeyName(kn string) {
 	switch {
 	case kn == "PRIMARY":
-		k.typ = keyPrimary
+		k.Typ = KeyPrimary
 	case strings.HasPrefix(kn, "UNIQUE:"):
 		kn = strings.TrimPrefix(kn, "UNIQUE:")
-		k.typ = keyUnique
+		k.Typ = KeyUnique
 	}
-	k.name = kn
-	k.key = kn
+	k.Name = kn
+	k.Key = kn
 }
 
-func (k *structKey) keyname() string {
-	if k.typ == keyPrimary {
+// Keyname returns "PRIMARY" for primary keys, or the key name otherwise.
+func (k *StructKey) Keyname() string {
+	if k.Typ == KeyPrimary {
 		return "PRIMARY"
 	}
-	return k.key
+	return k.Key
 }
 
-func (k *structKey) sqlKeyName() string {
-	if k.typ == keyPrimary {
+// SqlKeyName returns "PRIMARY KEY" for primary keys, or "INDEX keyname" otherwise.
+func (k *StructKey) SqlKeyName() string {
+	if k.Typ == KeyPrimary {
 		return "PRIMARY KEY"
 	}
-	return "INDEX " + QuoteName(k.key)
+	return "INDEX " + QuoteName(k.Key)
 }
 
-func (k *structKey) defString(be *Backend) string {
+// DefString returns the key definition SQL, dispatching to the engine's
+// KeyRenderer if available.
+func (k *StructKey) DefString(be *Backend) string {
+	d := be.Engine().dialect()
+	if kr, ok := d.(KeyRenderer); ok {
+		return kr.KeyDef(k, "")
+	}
+	// Generic default: MySQL-like inline definition
+	return k.genericDefString()
+}
+
+// InlineDefString returns the inline constraint definition for CREATE TABLE.
+func (k *StructKey) InlineDefString(be *Backend, tableName string) string {
+	d := be.Engine().dialect()
+	if kr, ok := d.(KeyRenderer); ok {
+		return kr.InlineKeyDef(k, tableName)
+	}
+	return k.genericDefString()
+}
+
+// CreateIndexSQL returns a CREATE INDEX statement, or empty string if the key
+// should be created inline.
+func (k *StructKey) CreateIndexSQL(be *Backend, tableName string) string {
+	d := be.Engine().dialect()
+	if kr, ok := d.(KeyRenderer); ok {
+		return kr.CreateIndex(k, tableName)
+	}
+	return "" // generic default: all keys are inline
+}
+
+// genericDefString generates a MySQL-like inline key definition.
+func (k *StructKey) genericDefString() string {
 	s := &strings.Builder{}
 
-	switch k.typ {
-	case keyPrimary:
-		// PRIMARY KEY [index_type] (key_part,...) [index_option] ...
-		// Primary keys don't have names
+	switch k.Typ {
+	case KeyPrimary:
 		s.WriteString("PRIMARY KEY ")
-	case keyUnique:
-		// UNIQUE [INDEX | KEY] [index_name] [index_type] (key_part,...) [index_option] ...
+	case KeyUnique:
 		s.WriteString("UNIQUE INDEX ")
-		s.WriteString(QuoteName(k.key))
-	case keyIndex:
-		// {INDEX | KEY} [index_name] [index_type] (key_part,...) [index_option] ...
+		s.WriteString(QuoteName(k.Key))
+	case KeyIndex:
 		s.WriteString("INDEX ")
-		s.WriteString(QuoteName(k.key))
-	case keyFulltext:
-		// {FULLTEXT | SPATIAL} [INDEX | KEY] [index_name] (key_part,...) [index_option] ...
+		s.WriteString(QuoteName(k.Key))
+	case KeyFulltext:
 		s.WriteString("FULLTEXT INDEX ")
-		s.WriteString(QuoteName(k.key))
-	case keySpatial:
+		s.WriteString(QuoteName(k.Key))
+	case KeySpatial:
 		s.WriteString("SPATIAL INDEX ")
-		s.WriteString(QuoteName(k.key))
-	case keyVector:
-		// MySQL does not support vector indexes
+		s.WriteString(QuoteName(k.Key))
+	case KeyVector:
 		return ""
 	default:
-		return "" // ??
+		return ""
 	}
 
 	s.WriteByte('(')
-	for n, f := range k.fields {
+	for n, f := range k.Fields {
 		if n > 0 {
 			s.WriteString(", ")
 		}
@@ -138,110 +168,12 @@ func (k *structKey) defString(be *Backend) string {
 	return s.String()
 }
 
-// pgKeyName returns a PostgreSQL-compatible key name that is unique within the schema.
-// PostgreSQL index names are schema-scoped (not table-scoped), so we prefix with the table name.
-func (k *structKey) pgKeyName(tableName string) string {
-	return tableName + "_" + k.key
-}
-
-// defStringPG generates the inline constraint definition for PostgreSQL CREATE TABLE.
-// Only PRIMARY KEY and UNIQUE constraints can appear inline in PostgreSQL.
-func (k *structKey) defStringPG(tableName string) string {
-	s := &strings.Builder{}
-
-	switch k.typ {
-	case keyPrimary:
-		s.WriteString("PRIMARY KEY ")
-	case keyUnique:
-		s.WriteString("CONSTRAINT ")
-		s.WriteString(QuoteName(k.pgKeyName(tableName)))
-		s.WriteString(" UNIQUE ")
-	default:
-		return "" // non-inline indexes handled separately
-	}
-
-	s.WriteByte('(')
-	for n, f := range k.fields {
-		if n > 0 {
-			s.WriteString(", ")
-		}
-		s.WriteString(QuoteName(f))
-	}
-	s.WriteByte(')')
-	return s.String()
-}
-
-// createIndexPG generates a CREATE INDEX statement for PostgreSQL.
-func (k *structKey) createIndexPG(tableName string) string {
-	s := &strings.Builder{}
-
-	switch k.typ {
-	case keyPrimary:
-		// Primary keys are created inline with CREATE TABLE
-		return ""
-	case keyUnique:
-		s.WriteString("CREATE UNIQUE INDEX ")
-		s.WriteString(QuoteName(k.pgKeyName(tableName)))
-	case keyIndex:
-		s.WriteString("CREATE INDEX ")
-		s.WriteString(QuoteName(k.pgKeyName(tableName)))
-	case keyVector:
-		s.WriteString("CREATE INDEX ")
-		s.WriteString(QuoteName(k.pgKeyName(tableName)))
-	default:
-		// FULLTEXT and SPATIAL not supported in PostgreSQL, skip
-		return ""
-	}
-
-	s.WriteString(" ON ")
-	s.WriteString(QuoteName(tableName))
-
-	if k.typ == keyVector {
-		// Vector index uses USING clause
-		// Default to HNSW, can be overridden with "method" attr
-		method := "hnsw"
-		if m, ok := k.attrs["method"]; ok {
-			method = strings.ToLower(m)
-		}
-		s.WriteString(" USING ")
-		s.WriteString(method)
-	}
-
-	s.WriteString(" (")
-	for n, f := range k.fields {
-		if n > 0 {
-			s.WriteString(", ")
-		}
-		s.WriteString(QuoteName(f))
-		// For vector indexes, add the operator class if specified
-		if k.typ == keyVector {
-			if opclass, ok := k.attrs["opclass"]; ok {
-				s.WriteString(" ")
-				s.WriteString(opclass)
-			}
-		}
-	}
-	s.WriteByte(')')
-	return s.String()
-}
-
-func (k *structKey) isUnique() bool {
-	switch k.typ {
-	case keyPrimary, keyUnique:
+// IsUnique returns true if this key is a primary key or unique index.
+func (k *StructKey) IsUnique() bool {
+	switch k.Typ {
+	case KeyPrimary, KeyUnique:
 		return true
 	default:
 		return false
 	}
-}
-
-func (k *structKey) matches(otherK *keyinfo) (bool, error) {
-	// check if this key matches
-	// For now, just return true as the original method did
-	return true, nil
-}
-
-func (k *structKey) matchesPG(otherK *pgShowIndex) (bool, error) {
-	// check if this key matches
-	// ColumnName?
-	return true, nil
 }

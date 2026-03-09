@@ -19,7 +19,7 @@ func Update[T any](ctx context.Context, target ...*T) error {
 }
 
 type updatedField struct {
-	f *structField
+	f *StructField
 	v any
 }
 
@@ -57,24 +57,24 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		if st == nil || !st.init {
 			// we don't have a state → update everything
 			for _, f := range t.fields {
-				v := val.Field(f.index).Interface()
-				upd[f.column] = &updatedField{f: f, v: v}
-				allvals[f.column] = v
+				v := val.Field(f.Index).Interface()
+				upd[f.Column] = &updatedField{f: f, v: v}
+				allvals[f.Column] = v
 			}
 		} else {
 			for _, f := range t.fields {
 				// grab state value
-				stv, ok := st.val[f.column]
-				newv := val.Field(f.index).Interface()
-				allvals[f.column] = newv
+				stv, ok := st.val[f.Column]
+				newv := val.Field(f.Index).Interface()
+				allvals[f.Column] = newv
 
 				if !ok {
 					// no value in state → just force update
-					upd[f.column] = &updatedField{f: f, v: newv}
+					upd[f.Column] = &updatedField{f: f, v: newv}
 					continue
 				}
 				if !reflect.DeepEqual(newv, stv) {
-					upd[f.column] = &updatedField{f: f, v: newv}
+					upd[f.Column] = &updatedField{f: f, v: newv}
 				}
 			}
 		}
@@ -103,13 +103,13 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 		req += " WHERE "
 		first = true
 		// render key
-		for _, col := range t.mainKey.fields {
+		for _, col := range t.mainKey.Fields {
 			if !first {
 				req += " AND "
 			} else {
 				first = false
 			}
-			flds = append(flds, engine.export(val.Field(t.fldcol[col].index).Interface(), t.fldcol[col]))
+			flds = append(flds, engine.export(val.Field(t.fldcol[col].Index).Interface(), t.fldcol[col]))
 			req += QuoteName(col) + " = " + d.Placeholder(len(flds))
 		}
 

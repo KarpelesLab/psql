@@ -28,12 +28,12 @@ func (t *TableMeta[T]) Delete(ctx context.Context, where any, opts ...*FetchOpti
 	if t.softDelete != nil && !opt.HardDelete {
 		// Soft delete: UPDATE SET DeletedAt = NOW()
 		req := B().Update(t.FormattedName(be)).
-			Set(map[string]any{t.softDelete.column: time.Now()})
+			Set(map[string]any{t.softDelete.Column: time.Now()})
 		if where != nil {
 			req = req.Where(where)
 		}
 		// Only soft-delete records that aren't already deleted
-		req = req.Where(map[string]any{t.softDelete.column: nil})
+		req = req.Where(map[string]any{t.softDelete.Column: nil})
 
 		if opt.LimitCount > 0 {
 			if opt.LimitStart > 0 {

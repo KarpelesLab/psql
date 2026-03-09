@@ -136,7 +136,7 @@ func parseAssocTag(tag string, finfo reflect.StructField, index int) *assocMeta 
 	}
 }
 
-func (a *assocMeta) preload(ctx context.Context, parentFldcol map[string]*structField, parentKey *structKey, targets []reflect.Value) error {
+func (a *assocMeta) preload(ctx context.Context, parentFldcol map[string]*StructField, parentKey *StructKey, targets []reflect.Value) error {
 	tableMapL.RLock()
 	targetTable, ok := tableMap[a.targetType]
 	tableMapL.RUnlock()
@@ -162,7 +162,7 @@ func (a *assocMeta) preload(ctx context.Context, parentFldcol map[string]*struct
 	return nil
 }
 
-func (a *assocMeta) preloadBelongsTo(ctx context.Context, parentFldcol map[string]*structField, targets []reflect.Value, loader assocFetcher) error {
+func (a *assocMeta) preloadBelongsTo(ctx context.Context, parentFldcol map[string]*StructField, targets []reflect.Value, loader assocFetcher) error {
 	fkField := findFieldByNameOrCol(parentFldcol, a.foreignKey)
 	if fkField == nil {
 		return fmt.Errorf("foreign key column %q not found", a.foreignKey)
@@ -170,7 +170,7 @@ func (a *assocMeta) preloadBelongsTo(ctx context.Context, parentFldcol map[strin
 
 	keySet := make(map[any]struct{})
 	for _, target := range targets {
-		fkVal := target.Field(fkField.index)
+		fkVal := target.Field(fkField.Index)
 		if fkVal.Kind() == reflect.Ptr && fkVal.IsNil() {
 			continue
 		}
@@ -195,7 +195,7 @@ func (a *assocMeta) preloadBelongsTo(ctx context.Context, parentFldcol map[strin
 	}
 
 	for _, target := range targets {
-		fkVal := target.Field(fkField.index)
+		fkVal := target.Field(fkField.Index)
 		if fkVal.Kind() == reflect.Ptr && fkVal.IsNil() {
 			continue
 		}
@@ -207,16 +207,16 @@ func (a *assocMeta) preloadBelongsTo(ctx context.Context, parentFldcol map[strin
 	return nil
 }
 
-func (a *assocMeta) preloadHasOne(ctx context.Context, parentKey *structKey, parentFldcol map[string]*structField, targets []reflect.Value, loader assocFetcher) error {
-	if parentKey == nil || len(parentKey.fields) != 1 {
+func (a *assocMeta) preloadHasOne(ctx context.Context, parentKey *StructKey, parentFldcol map[string]*StructField, targets []reflect.Value, loader assocFetcher) error {
+	if parentKey == nil || len(parentKey.Fields) != 1 {
 		return fmt.Errorf("parent must have a single-column primary key for has_one")
 	}
-	pkCol := parentKey.fields[0]
+	pkCol := parentKey.Fields[0]
 	pkField := parentFldcol[pkCol]
 
 	keySet := make(map[any]struct{})
 	for _, target := range targets {
-		keySet[target.Field(pkField.index).Interface()] = struct{}{}
+		keySet[target.Field(pkField.Index).Interface()] = struct{}{}
 	}
 	keys := make([]any, 0, len(keySet))
 	for k := range keySet {
@@ -229,7 +229,7 @@ func (a *assocMeta) preloadHasOne(ctx context.Context, parentKey *structKey, par
 	}
 
 	for _, target := range targets {
-		pk := target.Field(pkField.index).Interface()
+		pk := target.Field(pkField.Index).Interface()
 		if results, ok := resultMap[pk]; ok && len(results) > 0 {
 			target.Field(a.index).Set(results[0])
 		}
@@ -237,16 +237,16 @@ func (a *assocMeta) preloadHasOne(ctx context.Context, parentKey *structKey, par
 	return nil
 }
 
-func (a *assocMeta) preloadHasMany(ctx context.Context, parentKey *structKey, parentFldcol map[string]*structField, targets []reflect.Value, loader assocFetcher) error {
-	if parentKey == nil || len(parentKey.fields) != 1 {
+func (a *assocMeta) preloadHasMany(ctx context.Context, parentKey *StructKey, parentFldcol map[string]*StructField, targets []reflect.Value, loader assocFetcher) error {
+	if parentKey == nil || len(parentKey.Fields) != 1 {
 		return fmt.Errorf("parent must have a single-column primary key for has_many")
 	}
-	pkCol := parentKey.fields[0]
+	pkCol := parentKey.Fields[0]
 	pkField := parentFldcol[pkCol]
 
 	keySet := make(map[any]struct{})
 	for _, target := range targets {
-		keySet[target.Field(pkField.index).Interface()] = struct{}{}
+		keySet[target.Field(pkField.Index).Interface()] = struct{}{}
 	}
 	keys := make([]any, 0, len(keySet))
 	for k := range keySet {
@@ -259,7 +259,7 @@ func (a *assocMeta) preloadHasMany(ctx context.Context, parentKey *structKey, pa
 	}
 
 	for _, target := range targets {
-		pk := target.Field(pkField.index).Interface()
+		pk := target.Field(pkField.Index).Interface()
 		if results, ok := resultMap[pk]; ok {
 			sliceType := target.Field(a.index).Type()
 			slice := reflect.MakeSlice(sliceType, len(results), len(results))
@@ -272,17 +272,17 @@ func (a *assocMeta) preloadHasMany(ctx context.Context, parentKey *structKey, pa
 	return nil
 }
 
-func (a *assocMeta) preloadManyToMany(ctx context.Context, parentKey *structKey, parentFldcol map[string]*structField, targets []reflect.Value, loader assocFetcher) error {
-	if parentKey == nil || len(parentKey.fields) != 1 {
+func (a *assocMeta) preloadManyToMany(ctx context.Context, parentKey *StructKey, parentFldcol map[string]*StructField, targets []reflect.Value, loader assocFetcher) error {
+	if parentKey == nil || len(parentKey.Fields) != 1 {
 		return fmt.Errorf("parent must have a single-column primary key for many_to_many")
 	}
-	pkCol := parentKey.fields[0]
+	pkCol := parentKey.Fields[0]
 	pkField := parentFldcol[pkCol]
 
 	// Collect parent PKs
 	keySet := make(map[any]struct{})
 	for _, target := range targets {
-		keySet[target.Field(pkField.index).Interface()] = struct{}{}
+		keySet[target.Field(pkField.Index).Interface()] = struct{}{}
 	}
 	if len(keySet) == 0 {
 		return nil
@@ -357,7 +357,7 @@ func (a *assocMeta) preloadManyToMany(ctx context.Context, parentKey *structKey,
 
 	// Assign to parent targets
 	for _, target := range targets {
-		pk := fmt.Sprintf("%v", target.Field(pkField.index).Interface())
+		pk := fmt.Sprintf("%v", target.Field(pkField.Index).Interface())
 		if results, ok := grouped[pk]; ok {
 			sliceType := target.Field(a.index).Type()
 			slice := reflect.MakeSlice(sliceType, len(results), len(results))
@@ -370,12 +370,12 @@ func (a *assocMeta) preloadManyToMany(ctx context.Context, parentKey *structKey,
 	return nil
 }
 
-func findFieldByNameOrCol(fldcol map[string]*structField, name string) *structField {
+func findFieldByNameOrCol(fldcol map[string]*StructField, name string) *StructField {
 	if f, ok := fldcol[name]; ok {
 		return f
 	}
 	for _, f := range fldcol {
-		if f.name == name {
+		if f.Name == name {
 			return f
 		}
 	}
@@ -396,15 +396,15 @@ func (t *TableMeta[T]) assocFetchByColumn(ctx context.Context, column string, ke
 	m := make(map[any][]reflect.Value)
 	for _, r := range results {
 		val := reflect.ValueOf(r).Elem()
-		key := val.Field(fld.index).Interface()
+		key := val.Field(fld.Index).Interface()
 		m[key] = append(m[key], reflect.ValueOf(r))
 	}
 	return m, nil
 }
 
 func (t *TableMeta[T]) assocPrimaryKeyCol() string {
-	if t.mainKey != nil && len(t.mainKey.fields) == 1 {
-		return t.mainKey.fields[0]
+	if t.mainKey != nil && len(t.mainKey.Fields) == 1 {
+		return t.mainKey.Fields[0]
 	}
 	return ""
 }

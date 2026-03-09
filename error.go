@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 // Error wraps a SQL error with the query that caused it. It implements the
@@ -30,6 +28,16 @@ func (e *Error) Error() string {
 // Example:
 // Error 1146: Table 'test.Test_Table1' doesn't exist
 func IsNotExist(err error) bool {
+	// First check registered ErrorClassifiers
+	for _, d := range dialects {
+		if ec, ok := d.(ErrorClassifier); ok {
+			if ec.IsNotExist(err) {
+				return true
+			}
+		}
+	}
+
+	// Fallback to error number check
 	switch ErrorNumber(err) {
 	case 1008: // Can't drop database '%s'; database doesn't exist
 	case 1029: // View '%s' doesn't exist for '%s'
@@ -62,22 +70,33 @@ func IsNotExist(err error) bool {
 	return true
 }
 
+// ErrorNumber extracts a database error number from the error chain.
+// It delegates to registered ErrorClassifier implementations.
+// Returns 0 for nil errors, 0xffff for unrecognized errors.
 func ErrorNumber(err error) uint16 {
-	for {
-		if err == nil {
-			// no error
-			return 0
-		}
-		switch e := err.(type) {
-		case *mysql.MySQLError:
-			return e.Number
-		case interface{ Unwrap() error }:
-			err = e.Unwrap()
-		default:
-			// unknown error type, 0xffff can be differenciated from 0
-			return 0xffff
+	if err == nil {
+		return 0
+	}
+
+	// Try registered ErrorClassifiers
+	for _, d := range dialects {
+		if ec, ok := d.(ErrorClassifier); ok {
+			if n := ec.ErrorNumber(err); n != 0 && n != 0xffff {
+				return n
+			}
 		}
 	}
+
+	// Unwrap and try again
+	var wrapped interface{ Unwrap() error }
+	if errors.As(err, &wrapped) {
+		inner := wrapped.Unwrap()
+		if inner != nil && inner != err {
+			return ErrorNumber(inner)
+		}
+	}
+
+	return 0xffff
 }
 
 var (

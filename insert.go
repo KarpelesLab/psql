@@ -61,7 +61,7 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 		params := make([]any, len(t.fields))
 
 		for n, f := range t.fields {
-			fval := val.Field(f.index)
+			fval := val.Field(f.Index)
 			if fval.Kind() == reflect.Ptr {
 				if fval.IsNil() {
 					continue
@@ -117,12 +117,11 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 	ph := engine.Placeholders(len(t.fields), 1)
 	var req string
 
-	switch engine {
-	case EnginePostgreSQL:
-		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ") ON CONFLICT DO NOTHING"
-	case EngineSQLite:
-		req = "INSERT OR IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
-	default: // MySQL
+	d := engine.dialect()
+	if ur, ok := d.(UpsertRenderer); ok {
+		req = ur.InsertIgnoreSQL(tableName, t.fldStr, ph)
+	} else {
+		// Generic fallback: MySQL-like INSERT IGNORE
 		req = "INSERT IGNORE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	}
 
@@ -150,7 +149,7 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 		params := make([]any, len(t.fields))
 
 		for n, f := range t.fields {
-			fval := val.Field(f.index)
+			fval := val.Field(f.Index)
 			if fval.Kind() == reflect.Ptr {
 				if fval.IsNil() {
 					continue

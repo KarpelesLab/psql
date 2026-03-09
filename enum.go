@@ -43,12 +43,13 @@ func GetEnumTypeName(values string) string {
 	return GetEnumConstraintName(values)
 }
 
-// collectEnumConstraints collects all enum columns in a table and groups them by their values
-func collectEnumConstraints[T any](t *TableMeta[T], be *Backend) map[string]*EnumConstraint {
+// CollectEnumConstraints collects all enum columns in a table and groups them by their values.
+// This is exported so that database submodules can use it for schema checking.
+func CollectEnumConstraints(tv TableView, be *Backend) map[string]*EnumConstraint {
 	constraints := make(map[string]*EnumConstraint)
 
-	for _, f := range t.fields {
-		attrs := f.getAttrs(be)
+	for _, f := range tv.AllFields() {
+		attrs := f.GetAttrs(be)
 		if attrs == nil {
 			continue
 		}
@@ -79,8 +80,8 @@ func collectEnumConstraints[T any](t *TableMeta[T], be *Backend) map[string]*Enu
 		}
 
 		// Add this column to the constraint
-		tableName := t.FormattedName(be)
-		constraint.Columns[tableName] = append(constraint.Columns[tableName], f.column)
+		tableName := tv.FormattedName(be)
+		constraint.Columns[tableName] = append(constraint.Columns[tableName], f.Column)
 	}
 
 	return constraints

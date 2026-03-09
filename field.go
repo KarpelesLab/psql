@@ -10,34 +10,36 @@ import (
 	"strings"
 )
 
-type structField struct {
-	index    int
-	name     string
-	column   string // column name, can be != name
-	nullable bool   // if a ptr or a kind of nullable value
-	attrs    map[string]string
+// StructField holds metadata for a single table field/column, including its
+// Go struct index, SQL column name, type attributes, and scan function.
+type StructField struct {
+	Index    int
+	Name     string
+	Column   string // column name, can be != name
+	Nullable bool   // if a ptr or a kind of nullable value
+	Attrs    map[string]string
 	setter   func(v reflect.Value, from sql.RawBytes) error
-	rattrs   map[Engine]map[string]string // resolved attrs
+	Rattrs   map[Engine]map[string]string // resolved attrs
 }
 
-// getAttrs returns the fields' attrs for a given Engine, which can be cached for performance
-func (f *structField) getAttrs(be *Backend) map[string]string {
-	if r, ok := f.rattrs[be.Engine()]; ok {
+// GetAttrs returns the fields' attrs for a given Engine, which can be cached for performance
+func (f *StructField) GetAttrs(be *Backend) map[string]string {
+	if r, ok := f.Rattrs[be.Engine()]; ok {
 		return r
 	}
-	f.rattrs[be.Engine()] = f.resolveAttrs(be, f.attrs)
-	return f.rattrs[be.Engine()]
+	f.Rattrs[be.Engine()] = f.resolveAttrs(be, f.Attrs)
+	return f.Rattrs[be.Engine()]
 }
 
-func (f *structField) resolveAttrs(be *Backend, attrs map[string]string) map[string]string {
+func (f *StructField) resolveAttrs(be *Backend, attrs map[string]string) map[string]string {
 	// check for import
 	if imp, ok := attrs["import"]; ok {
 		var res map[string]string
 		// load it from magic
-		if magic, ok := magicEngineTypes[be.Engine()][f.column+"+"+imp]; ok {
+		if magic, ok := magicEngineTypes[be.Engine()][f.Column+"+"+imp]; ok {
 			// found a magic type
 			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
-		} else if magic, ok := magicTypes[f.column+"+"+imp]; ok {
+		} else if magic, ok := magicTypes[f.Column+"+"+imp]; ok {
 			// found a magic type
 			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
 		} else if magic, ok := magicEngineTypes[be.Engine()][imp]; ok {
@@ -48,7 +50,7 @@ func (f *structField) resolveAttrs(be *Backend, attrs map[string]string) map[str
 			res = f.resolveAttrs(be, parseAttrs(magic)) // recursive allowed
 		} else {
 			res = make(map[string]string)
-			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s engine %s", imp, f.column, be.Engine()), "event", "psql:field:attr:missing_import", "psql.field", f.name)
+			slog.Error(fmt.Sprintf("[psql] could not find import type %s for field %s engine %s", imp, f.Column, be.Engine()), "event", "psql:field:attr:missing_import", "psql.field", f.Name)
 		}
 
 		// override any values from the import
@@ -66,8 +68,10 @@ func (f *structField) resolveAttrs(be *Backend, attrs map[string]string) map[str
 	return attrs
 }
 
-func (f *structField) sqlType(be *Backend) string {
-	attrs := f.getAttrs(be)
+// SqlType returns the SQL type string for this field, dispatching to the
+// engine's TypeMapper if available.
+func (f *StructField) SqlType(be *Backend) string {
+	attrs := f.GetAttrs(be)
 	if attrs == nil {
 		return ""
 	}
@@ -79,117 +83,59 @@ func (f *structField) sqlType(be *Backend) string {
 
 	mytyp = strings.ToLower(mytyp)
 
-	switch mytyp {
-	case "enum", "set":
-		if be.Engine() == EngineSQLite {
-			// SQLite doesn't have enum or set types, use TEXT
-			return "text"
-		}
-		if be.Engine() == EnginePostgreSQL {
-			switch mytyp {
-			case "enum":
-				// For PostgreSQL, ENUMs are implemented as VARCHAR with CHECK constraints
-				// The CHECK constraint will be added separately during table creation/alteration
-				if mysize, ok := attrs["size"]; ok {
-					return "varchar(" + mysize + ")"
-				}
-				// Default size for enum columns
-				return "varchar(64)"
-			case "set":
-				// we return set but it will actually be a jsonb
-				return "varchar(128)"
-				//return "set"
-			}
-		}
-		// get "values"
-		if myvals, ok := attrs["values"]; ok {
-			// split with ,
-			l := strings.Split(myvals, ",")
-			// assuming nothing need to be escape for enum/set values (TODO FIXME)
-			return mytyp + "('" + strings.Join(l, "','") + "')"
-		} else {
-			// give up
-			return ""
-		}
-	case "vector":
-		if be.Engine() == EngineSQLite {
-			// SQLite doesn't have a vector type, use TEXT
-			return "text"
-		}
-		// Vector type: VECTOR(dimensions)
-		if mysize, ok := attrs["size"]; ok {
-			return "vector(" + mysize + ")"
-		}
-		return "vector"
-	default:
-		if be.Engine() == EngineSQLite {
-			// SQLite uses type affinity — strip sizes from types
-			return sqliteTypeAffinity(mytyp)
-		}
-		if be.Engine() == EnginePostgreSQL {
-			// pgsql requires int types to have no length
-			if x, ok := numericTypes[mytyp]; ok && x {
-				return mytyp
-			}
-		}
-		if mysize, ok := attrs["size"]; ok {
-			return mytyp + "(" + mysize + ")"
-		}
+	// Check if dialect implements TypeMapper
+	d := be.Engine().dialect()
+	if tm, ok := d.(TypeMapper); ok {
+		return tm.SqlType(mytyp, attrs)
+	}
+
+	// Generic default: type(size)
+	if mysize, ok := attrs["size"]; ok {
+		return mytyp + "(" + mysize + ")"
 	}
 
 	return mytyp
 }
 
-/*
-	column_definition: {
-	    data_type [NOT NULL | NULL] [DEFAULT {literal | (expr)} ]
-	      [VISIBLE | INVISIBLE]
-	      [AUTO_INCREMENT] [UNIQUE [KEY]] [[PRIMARY] KEY]
-	      [COMMENT 'string']
-	      [COLLATE collation_name]
-	      [COLUMN_FORMAT {FIXED | DYNAMIC | DEFAULT}]
-	      [ENGINE_ATTRIBUTE [=] 'string']
-	      [SECONDARY_ENGINE_ATTRIBUTE [=] 'string']
-	      [STORAGE {DISK | MEMORY}]
-	      [reference_definition]
-	      [check_constraint_definition]
-	  | data_type
-	      [COLLATE collation_name]
-	      [GENERATED ALWAYS] AS (expr)
-	      [VIRTUAL | STORED] [NOT NULL | NULL]
-	      [VISIBLE | INVISIBLE]
-	      [UNIQUE [KEY]] [[PRIMARY] KEY]
-	      [COMMENT 'string']
-	      [reference_definition]
-	      [check_constraint_definition]
-	}
-*/
-// sqliteTypeAffinity maps SQL types to SQLite type affinity names.
-// SQLite doesn't use sizes, so we strip them and map to the 5 storage classes.
-func sqliteTypeAffinity(typ string) string {
-	typ = strings.ToLower(typ)
-	switch typ {
-	case "tinyint", "smallint", "mediumint", "int", "integer", "bigint", "boolean", "bool":
-		return "integer"
-	case "float", "double", "real", "double precision", "numeric", "decimal":
-		return "real"
-	case "blob", "binary", "varbinary", "longblob", "mediumblob", "tinyblob":
-		return "blob"
-	case "char", "varchar", "text", "longtext", "mediumtext", "tinytext",
-		"timestamp", "datetime", "date", "time",
-		"jsonb", "json", "uuid", "xml", "cidr", "inet":
-		return "text"
-	default:
-		return "text"
-	}
-}
-
-func (f *structField) defString(be *Backend) string {
-	attrs := f.getAttrs(be)
-	mytyp := f.sqlType(be)
+// DefString returns the full column definition SQL for this field, dispatching
+// to the engine's TypeMapper if available.
+func (f *StructField) DefString(be *Backend) string {
+	attrs := f.GetAttrs(be)
+	mytyp := f.SqlType(be)
 	if mytyp == "" {
 		return ""
 	}
+
+	// Check if dialect implements TypeMapper
+	d := be.Engine().dialect()
+	if tm, ok := d.(TypeMapper); ok {
+		return tm.FieldDef(f.Column, mytyp, f.Nullable, attrs)
+	}
+
+	// Generic default
+	return f.genericDefString(be, mytyp, attrs)
+}
+
+// DefStringAlter returns a column definition suitable for ALTER TABLE ADD COLUMN.
+// If the dialect implements TypeMapper, it delegates to FieldDefAlter; otherwise
+// falls back to DefString.
+func (f *StructField) DefStringAlter(be *Backend) string {
+	attrs := f.GetAttrs(be)
+	mytyp := f.SqlType(be)
+	if mytyp == "" {
+		return ""
+	}
+
+	d := be.Engine().dialect()
+	if tm, ok := d.(TypeMapper); ok {
+		return tm.FieldDefAlter(f.Column, mytyp, f.Nullable, attrs)
+	}
+
+	return f.genericDefString(be, mytyp, attrs)
+}
+
+// genericDefString builds a generic column definition (MySQL-like).
+func (f *StructField) genericDefString(be *Backend, mytyp string, attrs map[string]string) string {
 	setType := false
 
 	if be.Engine() == EnginePostgreSQL && mytyp == "set" {
@@ -197,9 +143,7 @@ func (f *structField) defString(be *Backend) string {
 		setType = true
 	}
 
-	mydef := QuoteName(f.column) + " " + mytyp
-
-	// TODO unsigned
+	mydef := QuoteName(f.Column) + " " + mytyp
 
 	if null, ok := attrs["null"]; ok {
 		switch null {
@@ -212,31 +156,19 @@ func (f *structField) defString(be *Backend) string {
 		}
 	}
 	if def, ok := attrs["default"]; ok {
-		switch be.Engine() {
-		case EnginePostgreSQL:
-			// there are various things to take into account if engine is pgsql
-			if setType {
-				// need to encode default as json
-				js, _ := json.Marshal([]string{def})
-				def = string(js)
-			}
-			if def == "\\N" {
-				mydef += " DEFAULT NULL"
-			} else {
-				mydef += " DEFAULT " + Escape(def)
-			}
-		default:
-			if def == "\\N" {
-				mydef += " DEFAULT NULL"
-			} else {
-				mydef += " DEFAULT " + Escape(def)
-			}
+		if be.Engine() == EnginePostgreSQL && setType {
+			js, _ := json.Marshal([]string{def})
+			def = string(js)
+		}
+		if def == "\\N" {
+			mydef += " DEFAULT NULL"
+		} else {
+			mydef += " DEFAULT " + Escape(def)
 		}
 	}
 
 	if mycol, ok := attrs["collation"]; ok {
 		if be.Engine() != EngineSQLite {
-			// SQLite only supports BINARY, NOCASE, RTRIM collations
 			mydef += " COLLATE " + mycol
 		}
 	}
@@ -244,17 +176,16 @@ func (f *structField) defString(be *Backend) string {
 	return mydef
 }
 
-func (f *structField) matches(be *Backend, typ, null string, col, dflt *string) (bool, error) {
-	attrs := f.getAttrs(be)
+// Matches checks if this field matches the given database column properties.
+func (f *StructField) Matches(be *Backend, typ, null string, col, dflt *string) (bool, error) {
+	attrs := f.GetAttrs(be)
 	if attrs == nil {
 		return false, errors.New("no valid field defined")
 	}
 
-	myType := f.sqlType(be)
-	if a, b := numericTypes[typ]; myType != typ && a && b {
-		// typ we got from mysql is different, but that might not be an issue
+	myType := f.SqlType(be)
+	if a, b := NumericTypes[typ]; myType != typ && a && b {
 		if typ == strings.ToLower(attrs["type"]) {
-			// we're good
 			myType = typ
 		}
 	}
@@ -282,7 +213,6 @@ func (f *structField) matches(be *Backend, typ, null string, col, dflt *string) 
 	}
 
 	if mycol, ok := attrs["collation"]; ok && col != nil && mycol != *col {
-		// bad collation → alter
 		return false, nil
 	}
 

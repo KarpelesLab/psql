@@ -17,27 +17,44 @@ var (
 	tableMapL sync.RWMutex
 )
 
+// TableView is a non-generic interface for accessing table metadata from
+// dialect implementations (which cannot use type parameters).
+type TableView interface {
+	TableName() string
+	FormattedName(be *Backend) string
+	AllFields() []*StructField
+	AllKeys() []*StructKey
+	MainKey() *StructKey
+	FieldByColumn(col string) *StructField
+	FieldStr() string
+	TableAttrs() map[string]string
+	HasSoftDelete() bool
+}
+
 // TableMeta holds the metadata for a registered table type T, including its fields,
 // keys, associations, and SQL column mappings. Obtain one via [Table].
 type TableMeta[T any] struct {
 	typ          reflect.Type
 	table        string // table name
 	explicitName bool   // true if table name was explicitly set via psql.Name
-	fields       []*structField
-	fldcol       map[string]*structField
-	keys         []*structKey
-	mainKey      *structKey
+	fields       []*StructField
+	fldcol       map[string]*StructField
+	keys         []*StructKey
+	mainKey      *StructKey
 	fldStr       string // string of all fields
 	state        int
 	attrs        map[string]string
 	futures      sync.Map
 	assocs       map[string]*assocMeta // association metadata by Go field name
-	softDelete   *structField          // non-nil if soft delete is enabled
+	softDelete   *StructField          // non-nil if soft delete is enabled
 }
 
 type TableMetaIntf interface {
 	Name() string
 }
+
+// Verify TableMeta implements TableView.
+var _ TableView = (*TableMeta[struct{}])(nil)
 
 // Table returns the table object for T against DefaultBackend unless the provided
 // ctx value has a backend.
@@ -58,7 +75,7 @@ func Table[T any]() *TableMeta[T] {
 	info := &TableMeta[T]{
 		typ:    typ,
 		table:  FormatTableName(typ.Name()),
-		fldcol: make(map[string]*structField),
+		fldcol: make(map[string]*StructField),
 		attrs:  make(map[string]string),
 		assocs: make(map[string]*assocMeta),
 		state:  -1,
@@ -66,7 +83,7 @@ func Table[T any]() *TableMeta[T] {
 
 	cnt := typ.NumField()
 	var names []string
-	extraKeys := make(map[string]*structKey)
+	extraKeys := make(map[string]*StructKey)
 
 	for i := 0; i < cnt; i += 1 {
 		if !typ.Field(i).IsExported() {
@@ -118,15 +135,15 @@ func Table[T any]() *TableMeta[T] {
 			if info.state == -1 {
 				info.state = i
 			}
-			key := &structKey{
-				index: i,
-				name:  finfo.Name,
-				key:   col,
+			key := &StructKey{
+				Index: i,
+				Name:  finfo.Name,
+				Key:   col,
 			}
 			key.loadAttrs(attrs)
 			info.keys = append(info.keys, key)
 
-			if (info.mainKey == nil && key.isUnique()) || key.typ == keyPrimary {
+			if (info.mainKey == nil && key.IsUnique()) || key.Typ == KeyPrimary {
 				info.mainKey = key
 			}
 			continue
@@ -135,18 +152,18 @@ func Table[T any]() *TableMeta[T] {
 		if keyName, ok := attrs["key"]; ok {
 			delete(attrs, "key")
 			if k, found := extraKeys[keyName]; found {
-				k.fields = append(k.fields, col)
+				k.Fields = append(k.Fields, col)
 			} else {
-				k = &structKey{
-					index:  -1,
-					fields: []string{col},
-					attrs:  map[string]string{},
+				k = &StructKey{
+					Index:  -1,
+					Fields: []string{col},
+					Attrs:  map[string]string{},
 				}
 				k.loadKeyName(keyName)
 				extraKeys[keyName] = k
 				info.keys = append(info.keys, k)
 
-				if (info.mainKey == nil && k.isUnique()) || k.typ == keyPrimary {
+				if (info.mainKey == nil && k.IsUnique()) || k.Typ == KeyPrimary {
 					info.mainKey = k
 				}
 			}
@@ -157,23 +174,23 @@ func Table[T any]() *TableMeta[T] {
 			attrs["import"] = finfo.Type.String()
 		}
 
-		fld := &structField{
-			index:  i,
-			name:   finfo.Name,
-			column: col,
+		fld := &StructField{
+			Index:  i,
+			Name:   finfo.Name,
+			Column: col,
 			setter: findSetter(finfo.Type),
-			attrs:  attrs,
-			rattrs: make(map[Engine]map[string]string),
+			Attrs:  attrs,
+			Rattrs: make(map[Engine]map[string]string),
 		}
 		names = append(names, QuoteName(col))
 
 		// TODO handle other kind of nullables, such as sql.NullString etc
 		if finfo.Type.Kind() == reflect.Ptr {
-			fld.nullable = true
+			fld.Nullable = true
 		}
 
 		info.fields = append(info.fields, fld)
-		info.fldcol[fld.column] = fld
+		info.fldcol[fld.Column] = fld
 
 		// Detect soft delete: *time.Time field named "DeletedAt" or with softdelete attr
 		if _, ok := attrs["softdelete"]; ok || (finfo.Name == "DeletedAt" && finfo.Type == ptrTimeType) {
@@ -201,6 +218,11 @@ func (t *TableMeta[T]) Name() string {
 	return t.table
 }
 
+// TableName returns the raw table name (implements TableView).
+func (t *TableMeta[T]) TableName() string {
+	return t.table
+}
+
 // FormattedName returns the table name, applying the namer transformation if needed
 func (t *TableMeta[T]) FormattedName(be *Backend) string {
 	if t == nil {
@@ -212,6 +234,41 @@ func (t *TableMeta[T]) FormattedName(be *Backend) string {
 	}
 	// Apply namer transformation
 	return be.Namer().TableName(t.table)
+}
+
+// AllFields returns all fields (implements TableView).
+func (t *TableMeta[T]) AllFields() []*StructField {
+	return t.fields
+}
+
+// AllKeys returns all keys (implements TableView).
+func (t *TableMeta[T]) AllKeys() []*StructKey {
+	return t.keys
+}
+
+// MainKey returns the primary/unique key (implements TableView).
+func (t *TableMeta[T]) MainKey() *StructKey {
+	return t.mainKey
+}
+
+// FieldByColumn returns a field by its column name (implements TableView).
+func (t *TableMeta[T]) FieldByColumn(col string) *StructField {
+	return t.fldcol[col]
+}
+
+// FieldStr returns the comma-separated quoted field list (implements TableView).
+func (t *TableMeta[T]) FieldStr() string {
+	return t.fldStr
+}
+
+// TableAttrs returns the table-level attributes (implements TableView).
+func (t *TableMeta[T]) TableAttrs() map[string]string {
+	return t.attrs
+}
+
+// HasSoftDelete returns true if the table has a soft delete field (implements TableView).
+func (t *TableMeta[T]) HasSoftDelete() bool {
+	return t.softDelete != nil
 }
 
 func (t *TableMeta[T]) newobj() *T {
@@ -280,7 +337,7 @@ func (t *TableMeta[T]) scanValue(ctx context.Context, rows *sql.Rows, target *T)
 			// maybe report this as a warning?
 			continue
 		}
-		f := val.Field(fld.index)
+		f := val.Field(fld.Index)
 		// if nil, set to nil
 		if values[i] == nil {
 			if f.Kind() == reflect.Ptr {
@@ -299,7 +356,7 @@ func (t *TableMeta[T]) scanValue(ctx context.Context, rows *sql.Rows, target *T)
 		}
 		err = fld.setter(f, values[i])
 		if err != nil {
-			return fmt.Errorf("on field %s: %w", fld.name, err)
+			return fmt.Errorf("on field %s: %w", fld.Name, err)
 		}
 		if st != nil {
 			v := reflect.New(f.Type()).Elem()

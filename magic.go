@@ -3,18 +3,9 @@ package psql
 import "fmt"
 
 var magicEngineTypes = map[Engine]map[string]string{
-	EngineMySQL: {
-		"DATETIME": "type=DATETIME,size=6",
-		"JSON":     "type=LONGTEXT,format=json",
-	},
-	EnginePostgreSQL: {
-		"DATETIME": "type=TIMESTAMP,size=6,default='1970-01-01 00:00:00.000000'",
-		"JSON":     "type=JSONB,format=json",
-	},
-	EngineSQLite: {
-		"DATETIME": "type=TEXT",
-		"JSON":     "type=TEXT,format=json",
-	},
+	EngineMySQL:      {},
+	EnginePostgreSQL: {},
+	EngineSQLite:     {},
 }
 
 // quickhand types that can be imported easily, for example via `sql:",import=UUID"`
@@ -64,6 +55,9 @@ func DefineMagicType(typ string, definition string) {
 }
 
 func DefineMagicTypeEngine(e Engine, typ string, definition string) {
+	if magicEngineTypes[e] == nil {
+		magicEngineTypes[e] = make(map[string]string)
+	}
 	if _, found := magicEngineTypes[e][typ]; found {
 		panic(fmt.Sprintf("multiple definitions of type %s", typ))
 	}

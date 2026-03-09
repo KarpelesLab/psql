@@ -154,12 +154,6 @@ func TestBuilderTableUnsupportedType(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestPGYesOrNo(t *testing.T) {
-	assert.True(t, psql.PGYesOrNo("YES").V())
-	assert.False(t, psql.PGYesOrNo("NO").V())
-	assert.False(t, psql.PGYesOrNo("").V())
-}
-
 func TestBuilderSelectFields(t *testing.T) {
 	ctx := context.Background()
 

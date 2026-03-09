@@ -1,8 +1,10 @@
 package psql
 
-// Starting MySQL 8.0.19, numeric types length specification has been deprecated and may not be reflected, except for tinyint(1) or zerofill stuff.
-// Because we don't want to depend on the version we instead detect if a type is numeric, in which case we ignore the length difference
-var numericTypes = map[string]bool{
+// NumericTypes lists MySQL numeric types and whether their length specification
+// can be ignored for comparison purposes. Starting MySQL 8.0.19, numeric types
+// length specification has been deprecated. The bool value indicates whether the
+// length should be ignored (true) or is significant (false, e.g., tinyint(1)).
+var NumericTypes = map[string]bool{
 	"bit":              true,
 	"tinyint":          true,
 	"tinyint(1)":       false, // exception
@@ -14,34 +16,4 @@ var numericTypes = map[string]bool{
 	"float":            true,
 	"double":           true,
 	"double precision": true,
-}
-
-type mysqlShowFieldsResult struct {
-	Virtual    Name    `sql:",check=0"`
-	Field      string  `sql:",type=VARCHAR,size=256"`
-	Type       string  `sql:",type=VARCHAR,size=256"`
-	Collation  *string `sql:",type=VARCHAR,size=256,null=1"`
-	Null       string  `sql:",type=VARCHAR,size=3"` // "YES" or "NO"
-	Key        string  `sql:",type=VARCHAR,size=3"` // "PRI", "UNI", "MUL" or ""
-	Default    *string `sql:",type=VARCHAR,size=256"`
-	Extra      string  `sql:",type=VARCHAR,size=256"`
-	Privileges string  `sql:",type=VARCHAR,size=256"` // "select,insert,update,references"
-	Comment    string  `sql:",type=VARCHAR,size=256"`
-}
-
-type mysqlShowIndexResult struct {
-	Virtual     Name   `sql:",check=0"`
-	Table       string `sql:",type=VARCHAR,size=256"`
-	NonUnique   bool   `sql:"Non_unique"`
-	KeyName     string `sql:"Key_name,type=VARCHAR,size=256"`
-	SeqInIndex  int64  `sql:"Seq_in_index"`
-	ColumnName  string `sql:"Column_name,type=VARCHAR,size=256"`
-	Collation   string `sql:",type=VARCHAR,size=256"`
-	Cardinality int64
-	SubPart     *int64 `sql:"Sub_part"`
-	// Packed?
-	Null         string `sql:",type=VARCHAR,size=3"`             // "YES" or ""
-	IndexType    string `sql:"Index_type,type=VARCHAR,size=256"` // BTREE, HASH
-	Comment      string `sql:",type=VARCHAR,size=256"`
-	IndexComment string `sql:"Index_comment,type=VARCHAR,size=256"`
 }

@@ -35,42 +35,14 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	ph := engine.Placeholders(len(t.fields), 1)
 	var req string
 
-	switch engine {
-	case EnginePostgreSQL:
+	d := engine.dialect()
+	if ur, ok := d.(UpsertRenderer); ok {
+		req = ur.ReplaceSQL(tableName, t.fldStr, ph, t.mainKey, t.fields)
+	} else {
+		// Generic fallback: MySQL-like REPLACE INTO
 		if t.mainKey == nil {
-			return errors.New("cannot use Replace without a primary key on PostgreSQL")
+			return errors.New("cannot use Replace without a primary key")
 		}
-		// INSERT INTO ... ON CONFLICT (key) DO UPDATE SET ...
-		req = "INSERT INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ") ON CONFLICT ("
-		for i, col := range t.mainKey.fields {
-			if i > 0 {
-				req += ","
-			}
-			req += QuoteName(col)
-		}
-		req += ") DO UPDATE SET "
-		first := true
-		for _, f := range t.fields {
-			// skip key fields in SET clause
-			isKey := false
-			for _, col := range t.mainKey.fields {
-				if f.column == col {
-					isKey = true
-					break
-				}
-			}
-			if isKey {
-				continue
-			}
-			if !first {
-				req += ","
-			}
-			first = false
-			req += QuoteName(f.column) + "=EXCLUDED." + QuoteName(f.column)
-		}
-	case EngineSQLite:
-		req = "INSERT OR REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
-	default: // MySQL
 		req = "REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	}
 
@@ -93,7 +65,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 		params := make([]any, len(t.fields))
 
 		for n, f := range t.fields {
-			fval := val.Field(f.index)
+			fval := val.Field(f.Index)
 			if fval.Kind() == reflect.Ptr {
 				if fval.IsNil() {
 					continue

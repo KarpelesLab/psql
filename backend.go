@@ -4,150 +4,74 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/go-sql-driver/mysql"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	_ "modernc.org/sqlite"
 )
 
 // Backend represents a database connection with engine-specific behavior.
-// Create one with [New], [NewMySQL], [NewPG], or [NewSQLite], then attach
-// it to a context with [Backend.Plug] or [ContextBackend].
+// Create one with [New], or use a submodule constructor (e.g., mysql.New, pgsql.New,
+// sqlite.New), then attach it to a context with [Backend.Plug] or [ContextBackend].
 type Backend struct {
-	db        *sql.DB       // db backend, always set
-	pgdb      *pgxpool.Pool // pgx backend, if any
-	engine    Engine
-	checked   map[reflect.Type]bool
-	checkedLk sync.RWMutex
-	namer     Namer // custom namer for table/column names
+	db         *sql.DB
+	driverData any // engine-specific data (e.g., *pgxpool.Pool)
+	engine     Engine
+	checked    map[reflect.Type]bool
+	checkedLk  sync.RWMutex
+	namer      Namer // custom namer for table/column names
 }
 
 // New returns a [Backend] that connects to the database identified by dsn.
-// The engine is auto-detected from the DSN format:
-//
-//   - PostgreSQL/CockroachDB: "postgresql://user:pass@host:port/dbname"
-//   - MySQL: "user:pass@tcp(host:port)/dbname" (go-sql-driver/mysql format)
-//   - SQLite: "sqlite:path/to/file", "file:path", ":memory:", or any path ending in .db/.sqlite/.sqlite3
-//
-// For engine-specific configuration, use [NewMySQL], [NewPG], or [NewSQLite] directly.
+// The engine is auto-detected by trying registered [BackendFactory] implementations.
+// Import a database submodule (e.g., _ "github.com/KarpelesLab/psql/sqlite") to
+// register its factory.
 func New(dsn string) (*Backend, error) {
-	if strings.HasPrefix(dsn, "postgresql://") {
-		cfg, err := pgxpool.ParseConfig(dsn)
-		if err != nil {
-			return nil, err
+	for _, f := range backendFactories {
+		if f.MatchDSN(dsn) {
+			return f.CreateBackend(dsn)
 		}
-		return NewPG(cfg)
 	}
-	if strings.HasPrefix(dsn, "sqlite:") || strings.HasPrefix(dsn, "file:") || strings.HasSuffix(dsn, ".db") || strings.HasSuffix(dsn, ".sqlite") || strings.HasSuffix(dsn, ".sqlite3") || dsn == ":memory:" {
-		return NewSQLite(strings.TrimPrefix(dsn, "sqlite:"))
-	}
-	cfg, err := mysql.ParseDSN(dsn)
-	if err != nil {
-		return nil, err
-	}
-	return NewMySQL(cfg)
+	return nil, fmt.Errorf("no backend factory matches DSN: %s (did you import a database driver submodule?)", dsn)
 }
 
-// NewMySQL creates a [Backend] connected to a MySQL database using the given
-// mysql.Config. It sets ANSI SQL mode with NO_BACKSLASH_ESCAPES and configures
-// connection pooling (128 max open, 32 max idle, 3 min lifetime).
-func NewMySQL(cfg *mysql.Config) (*Backend, error) {
-	cfg.Params = map[string]string{
-		"charset":  "utf8mb4",
-		"sql_mode": "'ANSI,NO_BACKSLASH_ESCAPES'",
-	}
-
-	// use db to check
-	db, err := sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		return nil, fmt.Errorf("connection failed: %w", err)
-	}
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(128)
-	db.SetMaxIdleConns(32)
-
-	res, err := db.Query("SHOW VARIABLES LIKE 'version%'")
-	if err != nil {
-		return nil, fmt.Errorf("SHOW VARIABLES failed: %w", err)
-	}
-
-	defer res.Close()
-	for res.Next() {
-		var k, v string
-		if err := res.Scan(&k, &v); err != nil {
-			panic(err)
-		}
-		slog.Debug(fmt.Sprintf("[mysql] %s = %s", k, v), "event", "psql:init:dbvar", "psql.dbvar", k)
-	}
-
+// NewBackend creates a Backend with the given engine and *sql.DB. This is called
+// by submodule factories to construct backends.
+func NewBackend(engine Engine, db *sql.DB, opts ...BackendOption) *Backend {
 	b := &Backend{
 		db:      db,
-		engine:  EngineMySQL,
-		checked: make(map[reflect.Type]bool),
-		namer:   &LegacyNamer{}, // Default to LegacyNamer for backward compatibility
-	}
-
-	return b, nil
-}
-
-// NewPG creates a [Backend] connected to a PostgreSQL (or CockroachDB) database
-// using the given pgxpool.Config. It configures connection pooling (128 max open,
-// 32 max idle, 3 min lifetime).
-func NewPG(cfg *pgxpool.Config) (*Backend, error) {
-	pgdb, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
-	}
-	b := &Backend{
-		db:      stdlib.OpenDBFromPool(pgdb),
-		pgdb:    pgdb,
-		engine:  EnginePostgreSQL,
-		checked: make(map[reflect.Type]bool),
-		namer:   &LegacyNamer{}, // Default to LegacyNamer for backward compatibility
-	}
-	b.db.SetConnMaxLifetime(time.Minute * 3)
-	b.db.SetMaxOpenConns(128)
-	b.db.SetMaxIdleConns(32)
-
-	return b, nil
-}
-
-// NewSQLite creates a [Backend] connected to a SQLite database at the given path.
-// Pass ":memory:" for an in-memory database. WAL mode and foreign keys are
-// enabled automatically. The connection is limited to 1 open connection since
-// SQLite does not handle concurrent writes.
-func NewSQLite(dsn string) (*Backend, error) {
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite connection failed: %w", err)
-	}
-
-	// SQLite doesn't handle concurrent writes well, limit to 1 open connection
-	db.SetMaxOpenConns(1)
-	db.SetConnMaxLifetime(0)
-
-	// Enable WAL mode and foreign keys
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		slog.Warn(fmt.Sprintf("[sqlite] failed to enable WAL mode: %s", err), "event", "psql:init:sqlite_wal")
-	}
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		slog.Warn(fmt.Sprintf("[sqlite] failed to enable foreign keys: %s", err), "event", "psql:init:sqlite_fk")
-	}
-
-	b := &Backend{
-		db:      db,
-		engine:  EngineSQLite,
+		engine:  engine,
 		checked: make(map[reflect.Type]bool),
 		namer:   &LegacyNamer{},
 	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
+}
 
-	return b, nil
+// BackendOption is a functional option for [NewBackend].
+type BackendOption func(*Backend)
+
+// WithDriverData sets engine-specific driver data (e.g., *pgxpool.Pool for PostgreSQL).
+func WithDriverData(data any) BackendOption {
+	return func(b *Backend) {
+		b.driverData = data
+	}
+}
+
+// WithNamer sets the naming strategy for table/column names.
+func WithNamer(n Namer) BackendOption {
+	return func(b *Backend) {
+		b.namer = n
+	}
+}
+
+// WithPoolDefaults configures standard connection pool settings (128 max open,
+// 32 max idle, 3 min lifetime).
+func WithPoolDefaults(b *Backend) {
+	b.db.SetConnMaxLifetime(time.Minute * 3)
+	b.db.SetMaxOpenConns(128)
+	b.db.SetMaxIdleConns(32)
 }
 
 // Plug attaches this backend to the given context. All psql operations using
@@ -170,6 +94,14 @@ func (be *Backend) Engine() Engine {
 		return EngineUnknown
 	}
 	return be.engine
+}
+
+// DriverData returns the engine-specific driver data (e.g., *pgxpool.Pool for PostgreSQL).
+func (be *Backend) DriverData() any {
+	if be == nil {
+		return nil
+	}
+	return be.driverData
 }
 
 // Namer returns the configured naming strategy

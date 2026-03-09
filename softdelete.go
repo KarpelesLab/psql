@@ -16,7 +16,7 @@ func (t *TableMeta[T]) applySoftDelete(req *QueryBuilder, opt *FetchOptions) {
 	if t.softDelete == nil || (opt != nil && opt.WithDeleted) {
 		return
 	}
-	req.Where(map[string]any{t.softDelete.column: nil})
+	req.Where(map[string]any{t.softDelete.Column: nil})
 }
 
 // ForceDelete performs a hard DELETE regardless of whether the table uses soft delete.
@@ -43,7 +43,7 @@ func (t *TableMeta[T]) Restore(ctx context.Context, where any) (sql.Result, erro
 
 	be := GetBackend(ctx)
 	req := B().Update(t.FormattedName(be)).
-		Set(map[string]any{t.softDelete.column: Raw("NULL")}).
+		Set(map[string]any{t.softDelete.Column: Raw("NULL")}).
 		Where(where)
 	res, err := req.ExecQuery(ctx)
 	if err != nil {

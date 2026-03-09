@@ -21,12 +21,12 @@ func (t *TableMeta[T]) Factory(ctx context.Context) *T {
 	obj := objptr.Elem()
 
 	for _, f := range t.fields {
-		def, ok := f.getAttrs(GetBackend(ctx))["default"]
+		def, ok := f.GetAttrs(GetBackend(ctx))["default"]
 		if !ok {
 			continue
 		}
 		// handle errors?
-		typutil.AssignReflect(obj.Field(f.index), reflect.ValueOf(def))
+		typutil.AssignReflect(obj.Field(f.Index), reflect.ValueOf(def))
 	}
 	return objptr.Interface().(*T)
 }
