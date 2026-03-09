@@ -20,6 +20,32 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: psql_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: psql_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,14 +61,24 @@ jobs:
         run: go work init ./psql ./psql-test
       - name: Install gocovmerge
         run: go install github.com/wadey/gocovmerge@latest
-      - name: Run unit tests with coverage
+      - name: Unit tests
         working-directory: psql
         run: go test -coverprofile=cover-unit.out -covermode=atomic -coverpkg=github.com/portablesql/psql/... ./...
-      - name: Run integration tests with coverage
+      - name: Integration tests (SQLite)
         working-directory: psql-test
-        run: go test -coverprofile=cover-integ.out -covermode=atomic -coverpkg=github.com/portablesql/psql/... ./...
-      - name: Merge coverage profiles
-        run: gocovmerge psql/cover-unit.out psql-test/cover-integ.out > coverage.out
+        run: go test -coverprofile=cover-sqlite.out -covermode=atomic -coverpkg=github.com/portablesql/psql/... ./...
+      - name: Integration tests (PostgreSQL)
+        working-directory: psql-test
+        run: go test -coverprofile=cover-pgsql.out -covermode=atomic -coverpkg=github.com/portablesql/psql/... ./...
+        env:
+          PSQL_TEST_DSN: "postgres://test:test@localhost:5432/psql_test?sslmode=disable"
+      - name: Integration tests (MySQL)
+        working-directory: psql-test
+        run: go test -coverprofile=cover-mysql.out -covermode=atomic -coverpkg=github.com/portablesql/psql/... ./...
+        env:
+          PSQL_TEST_DSN: "root:test@tcp(127.0.0.1:3306)/psql_test"
+      - name: Merge coverage
+        run: gocovmerge psql/cover-unit.out psql-test/cover-sqlite.out psql-test/cover-pgsql.out psql-test/cover-mysql.out > coverage.out
       - name: Send to Coveralls
         uses: coverallsapp/github-action@v2
         with:
