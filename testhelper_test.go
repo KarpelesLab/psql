@@ -5,6 +5,10 @@ import (
 	"testing"
 
 	"github.com/KarpelesLab/psql"
+
+	// Register all backends so tests can use any engine via PSQL_TEST_DSN.
+	_ "github.com/KarpelesLab/psql/mysql"
+	_ "github.com/KarpelesLab/psql/pgsql"
 	_ "github.com/KarpelesLab/psql/sqlite"
 )
 
