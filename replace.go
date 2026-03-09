@@ -112,7 +112,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 				return &Error{Query: req, Err: err}
 			}
 			if rows.Next() {
-				if err := t.scanValue(ctx, rows, target); err != nil {
+				if err := t.scanValueReturning(ctx, rows, target); err != nil {
 					rows.Close()
 					return err
 				}
