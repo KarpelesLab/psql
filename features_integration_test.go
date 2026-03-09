@@ -188,6 +188,9 @@ type LockTable struct {
 
 func TestForUpdateSkipLockedIntegration(t *testing.T) {
 	be := getTestBackend(t)
+	if be.Engine() == psql.EngineSQLite {
+		t.Skip("SQLite does not support FOR UPDATE")
+	}
 	ctx := be.Plug(context.Background())
 	_ = psql.Q(`DROP TABLE IF EXISTS "test_lock"`).Exec(ctx)
 
@@ -208,6 +211,9 @@ func TestForUpdateSkipLockedIntegration(t *testing.T) {
 
 func TestForUpdateNoWaitIntegration(t *testing.T) {
 	be := getTestBackend(t)
+	if be.Engine() == psql.EngineSQLite {
+		t.Skip("SQLite does not support FOR UPDATE")
+	}
 	ctx := be.Plug(context.Background())
 	_ = psql.Q(`DROP TABLE IF EXISTS "test_lock"`).Exec(ctx)
 
