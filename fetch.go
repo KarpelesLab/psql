@@ -13,6 +13,8 @@ import (
 // passing them as variadic arguments.
 type FetchOptions struct {
 	Lock        bool
+	SkipLocked  bool            // append SKIP LOCKED after FOR UPDATE
+	NoWait      bool            // append NOWAIT after FOR UPDATE
 	LimitCount  int             // number of results to return if >0
 	LimitStart  int             // seek first record if >0
 	Sort        []SortValueable // fields to sort by
@@ -45,6 +47,12 @@ func LimitFrom(start, cnt int) *FetchOptions {
 // FetchLock is a [FetchOptions] that adds SELECT ... FOR UPDATE to lock the selected rows.
 var FetchLock = &FetchOptions{Lock: true}
 
+// FetchLockSkipLocked is a [FetchOptions] that adds FOR UPDATE SKIP LOCKED.
+var FetchLockSkipLocked = &FetchOptions{Lock: true, SkipLocked: true}
+
+// FetchLockNoWait is a [FetchOptions] that adds FOR UPDATE NOWAIT.
+var FetchLockNoWait = &FetchOptions{Lock: true, NoWait: true}
+
 // IncludeDeleted returns a [FetchOptions] that includes soft-deleted records in query results.
 func IncludeDeleted() *FetchOptions {
 	return &FetchOptions{WithDeleted: true}
@@ -55,6 +63,12 @@ func resolveFetchOpts(opts []*FetchOptions) *FetchOptions {
 	for _, opt := range opts {
 		if opt.Lock {
 			res.Lock = true
+		}
+		if opt.SkipLocked {
+			res.SkipLocked = true
+		}
+		if opt.NoWait {
+			res.NoWait = true
 		}
 		if opt.LimitCount > 0 {
 			res.LimitCount = opt.LimitCount
@@ -126,6 +140,8 @@ func (t *TableMeta[T]) Get(ctx context.Context, where any, opts ...*FetchOptions
 
 	if opt.Lock {
 		req.ForUpdate = true
+		req.SkipLocked = opt.SkipLocked
+		req.NoWait = opt.NoWait
 	}
 	req = req.Apply(opt.Scopes...)
 
@@ -183,6 +199,8 @@ func (t *TableMeta[T]) FetchOne(ctx context.Context, target *T, where any, opts 
 	req = req.Limit(1)
 	if opt.Lock {
 		req.ForUpdate = true
+		req.SkipLocked = opt.SkipLocked
+		req.NoWait = opt.NoWait
 	}
 	req = req.Apply(opt.Scopes...)
 
@@ -244,6 +262,8 @@ func (t *TableMeta[T]) Fetch(ctx context.Context, where any, opts ...*FetchOptio
 
 	if opt.Lock {
 		req.ForUpdate = true
+		req.SkipLocked = opt.SkipLocked
+		req.NoWait = opt.NoWait
 	}
 	req = req.Apply(opt.Scopes...)
 
@@ -303,6 +323,8 @@ func (t *TableMeta[T]) Iter(ctx context.Context, where any, opts ...*FetchOption
 
 	if opt.Lock {
 		req.ForUpdate = true
+		req.SkipLocked = opt.SkipLocked
+		req.NoWait = opt.NoWait
 	}
 	req = req.Apply(opt.Scopes...)
 

@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Error wraps a SQL error with the query that caused it. It implements the
@@ -78,6 +80,34 @@ func ErrorNumber(err error) uint16 {
 			return 0xffff
 		}
 	}
+}
+
+// IsDuplicate returns true if the error indicates a unique constraint violation
+// (duplicate key). Works across MySQL (error 1062), PostgreSQL (SQLSTATE 23505),
+// and SQLite (UNIQUE constraint failed).
+func IsDuplicate(err error) bool {
+	if err == nil {
+		return false
+	}
+	if ErrorNumber(err) == 1062 {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return true
+	}
+	// SQLite: walk through wrapped errors checking message
+	for e := err; e != nil; {
+		if strings.Contains(e.Error(), "UNIQUE constraint failed") {
+			return true
+		}
+		if u, ok := e.(interface{ Unwrap() error }); ok {
+			e = u.Unwrap()
+		} else {
+			break
+		}
+	}
+	return false
 }
 
 var (

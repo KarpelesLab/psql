@@ -121,6 +121,36 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		val = n.V
 	}
 
+	// Handle pointer wrapper types before Flatten (which dereferences pointers)
+	switch v := val.(type) {
+	case *SubIn:
+		if not {
+			b.WriteString(" NOT IN ")
+		} else {
+			b.WriteString(" IN ")
+		}
+		b.WriteString(v.Sub.escapeValueCtx(ctx))
+		return b.String()
+	case *Any:
+		return escapeAnyInWhere(ctx, key, v, not)
+	case *Increment:
+		b.WriteByte('=')
+		b.WriteString(fieldName(key).EscapeValue())
+		b.WriteByte('+')
+		b.WriteString(escapeCtx(ctx, v.Value))
+		return b.String()
+	case *Decrement:
+		b.WriteByte('=')
+		b.WriteString(fieldName(key).EscapeValue())
+		b.WriteByte('-')
+		b.WriteString(escapeCtx(ctx, v.Value))
+		return b.String()
+	case *SetRaw:
+		b.WriteByte('=')
+		b.WriteString(v.SQL)
+		return b.String()
+	}
+
 	if typutil.IsNil(val) {
 		if not {
 			b.WriteString(" IS NOT NULL")
@@ -146,6 +176,27 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		b.WriteString(" LIKE ")
 		b.WriteString(escapeCtx(ctx, v.Like))
 		b.WriteString(" ESCAPE '\\'")
+		return b.String()
+	case ILike:
+		// ignore Field, use engine-aware keyword
+		keyword := "LIKE"
+		suffix := " ESCAPE '\\'"
+		if ctx != nil {
+			switch ctx.e {
+			case EnginePostgreSQL:
+				keyword = "ILIKE"
+			case EngineSQLite:
+				suffix = " ESCAPE '\\' COLLATE NOCASE"
+			}
+		}
+		if not {
+			b.WriteString(" NOT")
+		}
+		b.WriteByte(' ')
+		b.WriteString(keyword)
+		b.WriteByte(' ')
+		b.WriteString(escapeCtx(ctx, v.Like))
+		b.WriteString(suffix)
 		return b.String()
 	case FindInSet:
 		// ignore Field
@@ -262,6 +313,26 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 			return "(" + strings.Join(conds, " AND ") + ")"
 		}
 	default:
+		rv := reflect.ValueOf(val)
+		if rv.Kind() == reflect.Slice {
+			// typed slices ([]int, []int64, etc.) → IN(...)
+			if rv.Len() == 0 {
+				return "FALSE"
+			}
+			if not {
+				b.WriteString(" NOT IN(")
+			} else {
+				b.WriteString(" IN(")
+			}
+			for i := 0; i < rv.Len(); i++ {
+				if i != 0 {
+					b.WriteByte(',')
+				}
+				b.WriteString(escapeCtx(ctx, rv.Index(i).Interface()))
+			}
+			b.WriteByte(')')
+			return b.String()
+		}
 		if not {
 			b.WriteString("!=")
 		} else {

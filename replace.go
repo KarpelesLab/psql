@@ -34,6 +34,7 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 	// REPLACE QUERY
 	ph := engine.Placeholders(len(t.fields), 1)
 	var req string
+	useReturning := false
 
 	switch engine {
 	case EnginePostgreSQL:
@@ -68,6 +69,8 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 			first = false
 			req += QuoteName(f.column) + "=EXCLUDED." + QuoteName(f.column)
 		}
+		req += " RETURNING " + t.fldStr
+		useReturning = true
 	case EngineSQLite:
 		req = "INSERT OR REPLACE INTO " + QuoteName(tableName) + " (" + t.fldStr + ") VALUES (" + ph + ")"
 	default: // MySQL
@@ -102,10 +105,25 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 			params[n] = engine.export(fval.Interface(), f)
 		}
 
-		_, err := stmt.ExecContext(ctx, params...)
-		if err != nil {
-			slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", tableName)
-			return &Error{Query: req, Err: err}
+		if useReturning {
+			rows, err := stmt.QueryContext(ctx, params...)
+			if err != nil {
+				slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", tableName)
+				return &Error{Query: req, Err: err}
+			}
+			if rows.Next() {
+				if err := t.scanValue(ctx, rows, target); err != nil {
+					rows.Close()
+					return err
+				}
+			}
+			rows.Close()
+		} else {
+			_, err := stmt.ExecContext(ctx, params...)
+			if err != nil {
+				slog.ErrorContext(ctx, req+"\n"+err.Error()+"\n"+debugStack(), "event", "psql:replace:run_fail", "psql.table", tableName)
+				return &Error{Query: req, Err: err}
+			}
 		}
 
 		if h, ok := any(target).(AfterSaveHook); ok {
