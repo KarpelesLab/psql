@@ -49,6 +49,12 @@ type UpsertRenderer interface {
 	InsertIgnoreSQL(tableName, fldStr, placeholders string) string
 }
 
+// ReturningRenderer is implemented by dialects that support RETURNING clauses
+// on INSERT/REPLACE/UPDATE statements (e.g., PostgreSQL).
+type ReturningRenderer interface {
+	SupportsReturning() bool
+}
+
 // ErrorClassifier handles engine-specific error interpretation.
 type ErrorClassifier interface {
 	ErrorNumber(err error) uint16

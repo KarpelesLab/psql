@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -50,12 +51,19 @@ type QueryBuilder struct {
 	LimitData   []int
 	renderData  []any // values?
 
+	// conflict/upsert
+	ConflictColumns []string // ON CONFLICT (columns)
+	ConflictUpdate  []any    // DO UPDATE SET fields (map[string]any entries)
+	ConflictNothing bool     // DO NOTHING / INSERT IGNORE
+
 	// flags
 	Distinct      bool
 	CalcFoundRows bool
 	UpdateIgnore  bool
 	InsertIgnore  bool
 	ForUpdate     bool
+	SkipLocked    bool
+	NoWait        bool
 
 	err error
 }
@@ -218,6 +226,48 @@ func (q *QueryBuilder) SetDistinct() *QueryBuilder {
 	return q
 }
 
+// OnConflict specifies the conflict columns for INSERT ... ON CONFLICT.
+func (q *QueryBuilder) OnConflict(columns ...string) *QueryBuilder {
+	q.ConflictColumns = columns
+	return q
+}
+
+// DoUpdate specifies the fields to update on conflict. Accepts map[string]any
+// entries, similar to [QueryBuilder.Set].
+func (q *QueryBuilder) DoUpdate(fields ...any) *QueryBuilder {
+	q.ConflictUpdate = append(q.ConflictUpdate, fields...)
+	return q
+}
+
+// DoNothing sets the ON CONFLICT action to DO NOTHING (PostgreSQL/SQLite)
+// or INSERT IGNORE (MySQL).
+func (q *QueryBuilder) DoNothing() *QueryBuilder {
+	q.ConflictNothing = true
+	return q
+}
+
+// SetForUpdate adds FOR UPDATE locking to the query.
+func (q *QueryBuilder) SetForUpdate() *QueryBuilder {
+	q.ForUpdate = true
+	return q
+}
+
+// SetSkipLocked adds SKIP LOCKED after FOR UPDATE. Rows locked by other
+// transactions are skipped instead of blocking.
+func (q *QueryBuilder) SetSkipLocked() *QueryBuilder {
+	q.ForUpdate = true
+	q.SkipLocked = true
+	return q
+}
+
+// SetNoWait adds NOWAIT after FOR UPDATE. The query fails immediately if
+// any selected row is locked by another transaction.
+func (q *QueryBuilder) SetNoWait() *QueryBuilder {
+	q.ForUpdate = true
+	q.NoWait = true
+	return q
+}
+
 // Join adds a JOIN clause to the query.
 func (q *QueryBuilder) Join(joinType, table string, condition ...any) *QueryBuilder {
 	q.renderData = append(q.renderData, &joinClause{
@@ -247,6 +297,35 @@ type joinClause struct {
 	joinType  string
 	table     tableName
 	condition []any
+}
+
+// SubIn wraps a [QueryBuilder] subquery for use with IN (subquery) in WHERE conditions:
+//
+//	psql.B().Select().From("users").Where(map[string]any{
+//	    "id": &psql.SubIn{psql.B().Select("user_id").From("orders")},
+//	})
+//	// → ... WHERE "id" IN (SELECT "user_id" FROM "orders")
+type SubIn struct {
+	Sub *QueryBuilder
+}
+
+// escapeValueCtx renders the QueryBuilder as a parenthesized subquery, sharing
+// the parent context's args slice so parameter numbering continues correctly.
+func (q *QueryBuilder) escapeValueCtx(ctx *renderContext) string {
+	savedReq := ctx.req
+	err := q.render(ctx)
+	if err != nil {
+		ctx.req = savedReq
+		return "NULL"
+	}
+	subSQL := strings.Join(ctx.req, " ")
+	ctx.req = savedReq
+	return "(" + subSQL + ")"
+}
+
+// EscapeValue renders the QueryBuilder as a parenthesized subquery (non-parameterized).
+func (q *QueryBuilder) EscapeValue() string {
+	return q.escapeValueCtx(nil)
 }
 
 // Apply runs the given scopes on this query builder, returning the modified builder.
@@ -365,16 +444,64 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 		ctx.append("SET")
 		ctx.append(escapeWhere(ctx, q.FieldsSet, ","))
 	case "INSERT":
-		if q.InsertIgnore {
-			ctx.append("IGNORE")
+		switch ctx.e {
+		case EnginePostgreSQL:
+			// PostgreSQL: use (cols) VALUES (vals) format
+			ctx.append("INTO")
+			err = q.renderTables(ctx)
+			if err != nil {
+				return err
+			}
+			colsVals := q.renderInsertColsVals(ctx)
+			ctx.append(colsVals)
+			// ON CONFLICT clause
+			if len(q.ConflictUpdate) > 0 && len(q.ConflictColumns) > 0 {
+				conflictCols := make([]string, len(q.ConflictColumns))
+				for i, c := range q.ConflictColumns {
+					conflictCols[i] = QuoteName(c)
+				}
+				ctx.append("ON CONFLICT (" + strings.Join(conflictCols, ",") + ") DO UPDATE SET")
+				ctx.append(escapeWhere(ctx, q.ConflictUpdate, ","))
+			} else if q.InsertIgnore || q.ConflictNothing {
+				ctx.append("ON CONFLICT DO NOTHING")
+			}
+		case EngineSQLite:
+			// SQLite: use (cols) VALUES (vals) format
+			if q.InsertIgnore || q.ConflictNothing {
+				ctx.req = []string{"INSERT", "OR", "IGNORE"}
+			}
+			ctx.append("INTO")
+			err = q.renderTables(ctx)
+			if err != nil {
+				return err
+			}
+			colsVals := q.renderInsertColsVals(ctx)
+			ctx.append(colsVals)
+			if len(q.ConflictUpdate) > 0 && len(q.ConflictColumns) > 0 {
+				conflictCols := make([]string, len(q.ConflictColumns))
+				for i, c := range q.ConflictColumns {
+					conflictCols[i] = QuoteName(c)
+				}
+				ctx.append("ON CONFLICT (" + strings.Join(conflictCols, ",") + ") DO UPDATE SET")
+				ctx.append(escapeWhere(ctx, q.ConflictUpdate, ","))
+			}
+		default:
+			// MySQL / Unknown: use SET syntax (MySQL-native)
+			if q.InsertIgnore || q.ConflictNothing {
+				ctx.append("IGNORE")
+			}
+			ctx.append("INTO")
+			err = q.renderTables(ctx)
+			if err != nil {
+				return err
+			}
+			ctx.append("SET")
+			ctx.append(escapeWhere(ctx, q.FieldsSet, ","))
+			if len(q.ConflictUpdate) > 0 {
+				ctx.append("ON DUPLICATE KEY UPDATE")
+				ctx.append(escapeWhere(ctx, q.ConflictUpdate, ","))
+			}
 		}
-		ctx.append("INTO")
-		err = q.renderTables(ctx)
-		if err != nil {
-			return err
-		}
-		ctx.append("SET")
-		ctx.append(escapeWhere(ctx, q.FieldsSet, ","))
 	case "INSERT_SELECT":
 		if len(q.Tables) < 2 {
 			return fmt.Errorf("INSERT SELECT requires at least two tables")
@@ -426,8 +553,15 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 	case 2:
 		ctx.append(ctx.d.LimitOffset(q.LimitData[0], q.LimitData[1]))
 	}
-	if q.ForUpdate {
+	if q.ForUpdate && ctx.e != EngineSQLite {
+		// SQLite uses file/WAL-level locking, so FOR UPDATE is silently
+		// omitted — users shouldn't need to worry about the engine.
 		ctx.append("FOR UPDATE")
+		if q.SkipLocked {
+			ctx.append("SKIP LOCKED")
+		} else if q.NoWait {
+			ctx.append("NOWAIT")
+		}
 	}
 
 	return nil
@@ -439,6 +573,36 @@ func (q *QueryBuilder) renderFields(ctx *renderContext) error {
 		return nil
 	}
 	return ctx.appendCommaValues(q.Fields...)
+}
+
+// renderInsertColsVals renders FieldsSet as "(col1,col2) VALUES (val1,val2)" format.
+// It iterates the FieldsSet entries (expected to be map[string]any) and extracts
+// sorted columns and their corresponding values.
+func (q *QueryBuilder) renderInsertColsVals(ctx *renderContext) string {
+	var cols []string
+	var vals []string
+
+	for _, fs := range q.FieldsSet {
+		switch m := fs.(type) {
+		case map[string]any:
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				cols = append(cols, QuoteName(k))
+				vals = append(vals, escapeCtx(ctx, m[k]))
+			}
+		}
+	}
+
+	if len(cols) == 0 {
+		// Fallback to SET syntax if no map entries found
+		return "SET " + escapeWhere(ctx, q.FieldsSet, ",")
+	}
+
+	return "(" + strings.Join(cols, ",") + ") VALUES (" + strings.Join(vals, ",") + ")"
 }
 
 func (q *QueryBuilder) renderTables(ctx *renderContext) error {

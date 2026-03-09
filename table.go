@@ -380,3 +380,75 @@ func (t *TableMeta[T]) scanValue(ctx context.Context, rows *sql.Rows, target *T)
 
 	return nil
 }
+
+// scanValueReturning is like scanValue but skips AfterScanHook. Used for
+// RETURNING clauses where the scan is part of an INSERT/REPLACE, not a SELECT.
+func (t *TableMeta[T]) scanValueReturning(ctx context.Context, rows *sql.Rows, target *T) error {
+	val := reflect.ValueOf(target).Elem()
+	st := t.rowstate(target)
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	n := len(cols)
+
+	values := make([]sql.RawBytes, n)
+	scan := make([]interface{}, n)
+	for i := range values {
+		scan[i] = &values[i]
+	}
+
+	err = rows.Scan(scan...)
+	if err != nil {
+		slog.Error(fmt.Sprintf("scan err %s", err), "event", "psql:table:scan_error", "psql.table", t.table)
+		return fmt.Errorf("scan error: %w", err)
+	}
+
+	if st != nil {
+		st.init = true
+		st.val = make(map[string]any)
+	}
+
+	for i := 0; i < n; i += 1 {
+		fld, ok := t.fldcol[cols[i]]
+		if !ok {
+			continue
+		}
+		f := val.Field(fld.Index)
+		if values[i] == nil {
+			if f.Kind() == reflect.Ptr {
+				if !f.IsNil() {
+					f.Set(reflect.Zero(f.Type()))
+				}
+			}
+			continue
+		}
+		for f.Kind() == reflect.Ptr {
+			if f.IsNil() {
+				f.Set(reflect.New(f.Type().Elem()))
+			}
+			f = f.Elem()
+		}
+		err = fld.setter(f, values[i])
+		if err != nil {
+			return fmt.Errorf("on field %s: %w", fld.Name, err)
+		}
+		if st != nil {
+			v := reflect.New(f.Type()).Elem()
+			vp := v
+			for vp.Kind() == reflect.Ptr {
+				if vp.IsNil() {
+					vp.Set(reflect.New(vp.Type().Elem()))
+				}
+				vp = vp.Elem()
+			}
+			fld.setter(vp, values[i])
+			st.val[cols[i]] = typutil.DeepClone(v.Interface())
+		}
+	}
+
+	// AfterScanHook is intentionally NOT called here since this is a
+	// RETURNING scan, not a user-initiated SELECT.
+	return nil
+}

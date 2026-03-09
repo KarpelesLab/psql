@@ -99,6 +99,36 @@ func ErrorNumber(err error) uint16 {
 	return 0xffff
 }
 
+// DuplicateChecker is implemented by dialects that can detect duplicate key errors.
+type DuplicateChecker interface {
+	IsDuplicate(err error) bool
+}
+
+// IsDuplicate returns true if the error indicates a unique constraint violation
+// (duplicate key). Works across MySQL (error 1062), PostgreSQL (SQLSTATE 23505),
+// and SQLite (UNIQUE constraint failed) via registered DuplicateChecker dialects.
+func IsDuplicate(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check registered DuplicateCheckers
+	for _, d := range dialects {
+		if dc, ok := d.(DuplicateChecker); ok {
+			if dc.IsDuplicate(err) {
+				return true
+			}
+		}
+	}
+
+	// Fallback: MySQL error 1062
+	if ErrorNumber(err) == 1062 {
+		return true
+	}
+
+	return false
+}
+
 var (
 	ErrNotReady           = errors.New("database is not ready (no connection is available)")
 	ErrNotNillable        = errors.New("field is nil but cannot be nil")

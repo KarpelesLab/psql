@@ -188,6 +188,12 @@ func (mysqlDialect) IsNotExist(err error) bool {
 	return false // handled by core via ErrorNumber
 }
 
+// DuplicateChecker implementation
+
+func (d mysqlDialect) IsDuplicate(err error) bool {
+	return d.ErrorNumber(err) == 1062
+}
+
 // SchemaChecker implementation
 
 func (mysqlDialect) CheckStructure(ctx context.Context, be *psql.Backend, tv psql.TableView) error {

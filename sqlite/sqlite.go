@@ -209,6 +209,22 @@ func (sqliteDialect) InsertIgnoreSQL(tableName, fldStr, placeholders string) str
 	return "INSERT OR IGNORE INTO " + psql.QuoteName(tableName) + " (" + fldStr + ") VALUES (" + placeholders + ")"
 }
 
+// DuplicateChecker implementation
+
+func (sqliteDialect) IsDuplicate(err error) bool {
+	for e := err; e != nil; {
+		if strings.Contains(e.Error(), "UNIQUE constraint failed") {
+			return true
+		}
+		if u, ok := e.(interface{ Unwrap() error }); ok {
+			e = u.Unwrap()
+		} else {
+			break
+		}
+	}
+	return false
+}
+
 // SchemaChecker implementation
 
 func (sqliteDialect) CheckStructure(ctx context.Context, be *psql.Backend, tv psql.TableView) error {

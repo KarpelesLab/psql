@@ -259,6 +259,12 @@ func (postgresDialect) InsertIgnoreSQL(tableName, fldStr, placeholders string) s
 	return "INSERT INTO " + psql.QuoteName(tableName) + " (" + fldStr + ") VALUES (" + placeholders + ") ON CONFLICT DO NOTHING"
 }
 
+// ReturningRenderer implementation
+
+func (postgresDialect) SupportsReturning() bool {
+	return true
+}
+
 // ErrorClassifier implementation
 
 func (postgresDialect) ErrorNumber(err error) uint16 {
@@ -267,6 +273,25 @@ func (postgresDialect) ErrorNumber(err error) uint16 {
 
 func (postgresDialect) IsNotExist(err error) bool {
 	// PG errors are handled by the core's fs.ErrNotExist check
+	return false
+}
+
+// DuplicateChecker implementation
+
+func (postgresDialect) IsDuplicate(err error) bool {
+	// Check for PG unique violation (SQLSTATE 23505)
+	for e := err; e != nil; {
+		if pgErr, ok := e.(interface{ SQLState() string }); ok {
+			if pgErr.SQLState() == "23505" {
+				return true
+			}
+		}
+		if u, ok := e.(interface{ Unwrap() error }); ok {
+			e = u.Unwrap()
+		} else {
+			break
+		}
+	}
 	return false
 }
 
