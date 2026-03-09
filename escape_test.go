@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KarpelesLab/psql"
+	"github.com/portablesql/psql"
 	"github.com/stretchr/testify/assert"
 )
 

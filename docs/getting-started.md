@@ -3,15 +3,15 @@
 ## Installation
 
 ```bash
-go get github.com/KarpelesLab/psql
+go get github.com/portablesql/psql
 ```
 
 Then install the driver submodule for your database:
 
 ```bash
-go get github.com/KarpelesLab/psql/mysql   # MySQL / MariaDB
-go get github.com/KarpelesLab/psql/pgsql   # PostgreSQL / CockroachDB
-go get github.com/KarpelesLab/psql/sqlite  # SQLite
+go get github.com/portablesql/psql/mysql   # MySQL / MariaDB
+go get github.com/portablesql/psql/pgsql   # PostgreSQL / CockroachDB
+go get github.com/portablesql/psql/sqlite  # SQLite
 ```
 
 Requires Go 1.23 or later.
@@ -22,8 +22,8 @@ Import the driver with a blank identifier, then use `psql.New()` with a DSN stri
 
 ```go
 import (
-    "github.com/KarpelesLab/psql"
-    _ "github.com/KarpelesLab/psql/pgsql"  // register PostgreSQL driver
+    "github.com/portablesql/psql"
+    _ "github.com/portablesql/psql/pgsql"  // register PostgreSQL driver
 )
 
 be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")
@@ -32,14 +32,14 @@ be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")
 ### DSN Formats
 
 ```go
-import _ "github.com/KarpelesLab/psql/pgsql"
+import _ "github.com/portablesql/psql/pgsql"
 be, err := psql.New("postgresql://user:pass@localhost:5432/mydb")  // PostgreSQL
 be, err := psql.New("postgres://user:pass@localhost:5432/mydb")    // also PostgreSQL
 
-import _ "github.com/KarpelesLab/psql/mysql"
+import _ "github.com/portablesql/psql/mysql"
 be, err := psql.New("user:pass@tcp(localhost:3306)/mydb")          // MySQL
 
-import _ "github.com/KarpelesLab/psql/sqlite"
+import _ "github.com/portablesql/psql/sqlite"
 be, err := psql.New(":memory:")           // SQLite in-memory
 be, err := psql.New("sqlite:mydata.db")   // SQLite file
 be, err := psql.New("file:test.db")       // SQLite file URI
@@ -51,14 +51,14 @@ be, err := psql.New("data.sqlite3")       // detected by extension
 Each submodule also exports a `New` function for engine-specific configuration:
 
 ```go
-import psqlmysql "github.com/KarpelesLab/psql/mysql"
+import psqlmysql "github.com/portablesql/psql/mysql"
 
 cfg, _ := mysql.ParseDSN("user:pass@tcp(localhost:3306)/mydb")
 be, err := psqlmysql.New(cfg)
 ```
 
 ```go
-import psqlpg "github.com/KarpelesLab/psql/pgsql"
+import psqlpg "github.com/portablesql/psql/pgsql"
 
 cfg, _ := pgxpool.ParseConfig("postgresql://...")
 be, err := psqlpg.New(cfg)

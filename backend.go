@@ -23,7 +23,7 @@ type Backend struct {
 
 // New returns a [Backend] that connects to the database identified by dsn.
 // The engine is auto-detected by trying registered [BackendFactory] implementations.
-// Import a database submodule (e.g., _ "github.com/KarpelesLab/psql/sqlite") to
+// Import a database submodule (e.g., _ "github.com/portablesql/psql-sqlite") to
 // register its factory.
 func New(dsn string) (*Backend, error) {
 	for _, f := range backendFactories {

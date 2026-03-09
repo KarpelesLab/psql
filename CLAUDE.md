@@ -12,7 +12,7 @@
 - Use custom error handling with `*Error` struct that implements `Unwrap()`
 - Error enums defined in package-level vars with `Err` prefix
 - Helper functions like `IsNotExist()` for common error patterns
-- Package name: `psql` (import as `github.com/KarpelesLab/psql`)
+- Package name: `psql` (import as `github.com/portablesql/psql`)
 - Use structs with SQL tags for object binding: `sql:",key=PRIMARY"` or `sql:"Name,type=VARCHAR,size=64"`
 - Query builder pattern: Start with `psql.B()` followed by methods like `.Select()`, `.From()`, etc.
 - Test files use separate `psql_test` package

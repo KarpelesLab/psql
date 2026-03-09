@@ -3,10 +3,9 @@ package psql_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
-	"github.com/KarpelesLab/psql"
+	"github.com/portablesql/psql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,22 +21,8 @@ func TestIsDuplicate(t *testing.T) {
 		assert.False(t, psql.IsDuplicate(errors.New("something went wrong")))
 	})
 
-	t.Run("SQLite unique constraint", func(t *testing.T) {
-		err := errors.New("UNIQUE constraint failed: users.email")
-		assert.True(t, psql.IsDuplicate(err))
-	})
-
-	t.Run("wrapped SQLite unique constraint", func(t *testing.T) {
-		inner := errors.New("UNIQUE constraint failed: users.email")
-		err := fmt.Errorf("insert failed: %w", inner)
-		assert.True(t, psql.IsDuplicate(err))
-	})
-
-	t.Run("wrapped in psql.Error", func(t *testing.T) {
-		inner := errors.New("UNIQUE constraint failed: users.email")
-		err := &psql.Error{Query: "INSERT INTO ...", Err: inner}
-		assert.True(t, psql.IsDuplicate(err))
-	})
+	// NOTE: SQLite-specific duplicate detection tests removed — they require
+	// the SQLite dialect to be registered (via the psql-sqlite driver).
 }
 
 // === CaseInsensitive Like tests ===

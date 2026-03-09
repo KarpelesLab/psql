@@ -1,7 +1,7 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/KarpelesLab/psql.svg)](https://pkg.go.dev/github.com/KarpelesLab/psql)
-[![Build Status](https://github.com/KarpelesLab/psql/actions/workflows/test.yml/badge.svg)](https://github.com/KarpelesLab/psql/actions/workflows/test.yml)
-[![Coverage Status](https://coveralls.io/repos/github/KarpelesLab/psql/badge.svg?branch=master)](https://coveralls.io/github/KarpelesLab/psql?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/KarpelesLab/psql)](https://goreportcard.com/report/github.com/KarpelesLab/psql)
+[![Go Reference](https://pkg.go.dev/badge/github.com/portablesql/psql.svg)](https://pkg.go.dev/github.com/portablesql/psql)
+[![Build Status](https://github.com/portablesql/psql/actions/workflows/test.yml/badge.svg)](https://github.com/portablesql/psql/actions/workflows/test.yml)
+[![Coverage Status](https://coveralls.io/repos/github/portablesql/psql/badge.svg?branch=master)](https://coveralls.io/github/portablesql/psql?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/portablesql/psql)](https://goreportcard.com/report/github.com/portablesql/psql)
 
 # psql
 
@@ -13,8 +13,8 @@ Similar to GORM but focused on modern Go features (generics, 1.23 iterators) and
 
 ```go
 import (
-    "github.com/KarpelesLab/psql"
-    _ "github.com/KarpelesLab/psql/sqlite" // import the driver you need
+    "github.com/portablesql/psql"
+    _ "github.com/portablesql/psql-sqlite" // import the driver you need
 )
 
 // Connect (engine auto-detected from DSN)
@@ -47,9 +47,9 @@ users, err := psql.Fetch[User](ctx, map[string]any{"Name": "Alice Smith"})
 Import only the driver submodule you need:
 
 ```go
-import _ "github.com/KarpelesLab/psql/mysql"   // MySQL / MariaDB
-import _ "github.com/KarpelesLab/psql/pgsql"   // PostgreSQL / CockroachDB
-import _ "github.com/KarpelesLab/psql/sqlite"  // SQLite
+import _ "github.com/portablesql/psql-mysql"   // MySQL / MariaDB
+import _ "github.com/portablesql/psql-pgsql"   // PostgreSQL / CockroachDB
+import _ "github.com/portablesql/psql-sqlite"  // SQLite
 ```
 
 DSN format is auto-detected:
