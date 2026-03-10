@@ -303,6 +303,15 @@ func escapeWhereSub(ctx *renderContext, key string, val any) string {
 		} else {
 			return "(" + strings.Join(conds, " AND ") + ")"
 		}
+	case []byte:
+		// Binary data — render as value, not as IN(byte1, byte2, ...).
+		if not {
+			b.WriteString("!=")
+		} else {
+			b.WriteByte('=')
+		}
+		b.WriteString(escapeCtx(ctx, v))
+		return b.String()
 	default:
 		rv := reflect.ValueOf(val)
 		if rv.Kind() == reflect.Slice {

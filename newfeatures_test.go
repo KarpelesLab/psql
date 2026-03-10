@@ -359,6 +359,74 @@ func TestExistsWithCoalesce(t *testing.T) {
 	assert.Contains(t, sql, "COALESCE")
 }
 
+// === []byte in SET and WHERE tests ===
+
+func TestByteSliceInSet(t *testing.T) {
+	ctx := context.Background()
+
+	query := psql.B().Update("files").
+		Set(map[string]any{"data": []byte{0xff, 0x00, 0xbe, 0xef}}).
+		Where(map[string]any{"id": 1})
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"data"=x'ff00beef'`)
+}
+
+func TestByteSliceInWhere(t *testing.T) {
+	ctx := context.Background()
+
+	query := psql.B().Select().From("files").
+		Where(map[string]any{"hash": []byte{0xde, 0xad}})
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"hash"=x'dead'`)
+}
+
+func TestByteSliceNotInWhere(t *testing.T) {
+	ctx := context.Background()
+
+	query := psql.B().Select().From("files").
+		Where(map[string]any{"hash": &psql.Not{V: []byte{0xde, 0xad}}})
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"hash"!=x'dead'`)
+}
+
+func TestByteSliceNilInSet(t *testing.T) {
+	ctx := context.Background()
+
+	// nil []byte is treated as NULL (renders as IS NULL via escapeWhereSub's nil path)
+	query := psql.B().Update("files").
+		Set(map[string]any{"data": []byte(nil)}).
+		Where(map[string]any{"id": 1})
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"data" IS NULL`)
+}
+
+func TestByteSliceEmptyInSet(t *testing.T) {
+	ctx := context.Background()
+
+	query := psql.B().Update("files").
+		Set(map[string]any{"data": []byte{}}).
+		Where(map[string]any{"id": 1})
+	sql, err := query.Render(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"data"=x''`)
+}
+
+func TestByteSliceRenderArgs(t *testing.T) {
+	ctx := context.Background()
+
+	query := psql.B().Update("files").
+		Set(map[string]any{"data": []byte{0xff}}).
+		Where(map[string]any{"id": 1})
+	sql, args, err := query.RenderArgs(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"data"=?`)
+	assert.Len(t, args, 2) // []byte{0xff} and 1
+}
+
 func TestGreatestWithDecrement(t *testing.T) {
 	ctx := context.Background()
 
