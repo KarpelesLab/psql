@@ -474,7 +474,7 @@ func TestMiscPlaceholdersMySQL(t *testing.T) {
 
 type testFactory struct{}
 
-func (f *testFactory) MatchDSN(dsn string) bool         { return dsn == "test://match" }
+func (f *testFactory) MatchDSN(dsn string) bool { return dsn == "test://match" }
 func (f *testFactory) CreateBackend(dsn string) (*psql.Backend, error) {
 	return psql.NewBackend(psql.EngineMySQL, nil), nil
 }

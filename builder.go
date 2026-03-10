@@ -79,8 +79,11 @@ func B() *QueryBuilder {
 
 // Select sets the query type to SELECT and specifies the fields to retrieve.
 // String arguments are treated as field names. Pass no arguments to select all (*).
+// When called after [QueryBuilder.InsertSelect], the query type is preserved.
 func (q *QueryBuilder) Select(fields ...any) *QueryBuilder {
-	q.Query = "SELECT"
+	if q.Query != "INSERT_SELECT" {
+		q.Query = "SELECT"
+	}
 	if len(fields) > 0 {
 		q.Fields = make([]any, 0, len(fields))
 		for _, field := range fields {
@@ -268,34 +271,60 @@ func (q *QueryBuilder) SetNoWait() *QueryBuilder {
 	return q
 }
 
-// Join adds a JOIN clause to the query.
-func (q *QueryBuilder) Join(joinType, table string, condition ...any) *QueryBuilder {
+// Join adds a JOIN clause to the query. The table can be a string (table name)
+// or an [EscapeTableable] such as [SubTable] for subquery joins:
+//
+//	q.Join("LEFT", "orders", psql.Equal(psql.F("orders.user_id"), psql.F("users.id")))
+//	q.Join("LEFT", psql.SubTable(subQuery, "sq"), psql.Equal(psql.F("sq.id"), psql.F("t.id")))
+func (q *QueryBuilder) Join(joinType string, table any, condition ...any) *QueryBuilder {
+	var tbl EscapeTableable
+	switch v := table.(type) {
+	case string:
+		tbl = tableName(v)
+	case EscapeTableable:
+		tbl = v
+	default:
+		q.errorf("unsupported type %T passed as join table", table)
+		return q
+	}
 	q.renderData = append(q.renderData, &joinClause{
 		joinType:  joinType,
-		table:     tableName(table),
+		table:     tbl,
 		condition: condition,
 	})
 	return q
 }
 
-// LeftJoin adds a LEFT JOIN clause to the query.
-func (q *QueryBuilder) LeftJoin(table string, condition ...any) *QueryBuilder {
+// LeftJoin adds a LEFT JOIN clause. The table can be a string or [EscapeTableable].
+func (q *QueryBuilder) LeftJoin(table any, condition ...any) *QueryBuilder {
 	return q.Join("LEFT", table, condition...)
 }
 
-// InnerJoin adds an INNER JOIN clause to the query.
-func (q *QueryBuilder) InnerJoin(table string, condition ...any) *QueryBuilder {
+// InnerJoin adds an INNER JOIN clause. The table can be a string or [EscapeTableable].
+func (q *QueryBuilder) InnerJoin(table any, condition ...any) *QueryBuilder {
 	return q.Join("INNER", table, condition...)
 }
 
-// RightJoin adds a RIGHT JOIN clause to the query.
-func (q *QueryBuilder) RightJoin(table string, condition ...any) *QueryBuilder {
+// RightJoin adds a RIGHT JOIN clause. The table can be a string or [EscapeTableable].
+func (q *QueryBuilder) RightJoin(table any, condition ...any) *QueryBuilder {
 	return q.Join("RIGHT", table, condition...)
+}
+
+// InsertSelect creates an INSERT ... SELECT query. Specify the destination table,
+// then chain [QueryBuilder.Select], [QueryBuilder.From], and [QueryBuilder.Where]
+// to define the source query:
+//
+//	psql.B().InsertSelect("archive").Select("id", "name").From("users").
+//	    Where(map[string]any{"active": false})
+//	// → INSERT INTO "archive" SELECT "id","name" FROM "users" WHERE ("active"=FALSE)
+func (q *QueryBuilder) InsertSelect(destTable any) *QueryBuilder {
+	q.Query = "INSERT_SELECT"
+	return q.Table(destTable)
 }
 
 type joinClause struct {
 	joinType  string
-	table     tableName
+	table     EscapeTableable
 	condition []any
 }
 
@@ -511,7 +540,7 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 			ctx.append("IGNORE")
 		}
 		table := q.Tables[0]
-		ctx.append("INTO", table.EscapeTable())
+		ctx.append("INTO", escapeTableWithCtx(ctx, table))
 		ctx.append("SELECT")
 		if q.Distinct {
 			ctx.append("DISTINCT")
@@ -521,7 +550,8 @@ func (q *QueryBuilder) render(ctx *renderContext) error {
 			return err
 		}
 		ctx.append("FROM")
-		err = q.renderTables(ctx)
+		// Render only source tables (skip destination table at index 0)
+		err = q.renderTablesFrom(ctx, 1)
 		if err != nil {
 			return err
 		}
@@ -606,13 +636,19 @@ func (q *QueryBuilder) renderInsertColsVals(ctx *renderContext) string {
 }
 
 func (q *QueryBuilder) renderTables(ctx *renderContext) error {
+	return q.renderTablesFrom(ctx, 0)
+}
+
+func (q *QueryBuilder) renderTablesFrom(ctx *renderContext, startIdx int) error {
 	b := &strings.Builder{}
 
-	for n, v := range q.Tables {
-		if n != 0 {
+	first := true
+	for i := startIdx; i < len(q.Tables); i++ {
+		if !first {
 			b.WriteByte(',')
 		}
-		b.WriteString(v.EscapeTable())
+		first = false
+		b.WriteString(escapeTableWithCtx(ctx, q.Tables[i]))
 	}
 
 	// Append JOIN clauses
@@ -621,7 +657,7 @@ func (q *QueryBuilder) renderTables(ctx *renderContext) error {
 			b.WriteByte(' ')
 			b.WriteString(j.joinType)
 			b.WriteString(" JOIN ")
-			b.WriteString(j.table.EscapeTable())
+			b.WriteString(escapeTableWithCtx(ctx, j.table))
 			if len(j.condition) > 0 {
 				b.WriteString(" ON ")
 				b.WriteString(escapeWhere(ctx, j.condition, " AND "))
