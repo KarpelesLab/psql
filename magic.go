@@ -4,7 +4,7 @@ import "fmt"
 
 var magicEngineTypes = map[Engine]map[string]string{
 	EngineMySQL:      {},
-	EnginePostgreSQL: {},
+	EnginePostgreSQL: {"[]uint8": "type=BYTEA,null=0"},
 	EngineSQLite:     {},
 }
 
@@ -44,6 +44,7 @@ var magicTypes = map[string]string{
 	"psql.Set":        "type=SET,null=0",
 	"*psql.Set":       "type=SET,null=1",
 	"Stamp+time.Time": "import=TS", // for time.Time fields named "Stamp"
+	"[]uint8":         "type=BLOB,null=0",
 	"psql.Vector":     "type=VECTOR,null=1",
 }
 
