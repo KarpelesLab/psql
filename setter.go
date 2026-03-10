@@ -43,6 +43,11 @@ func findSetter(t reflect.Type) func(v reflect.Value, from sql.RawBytes) error {
 		return float32Setter
 	case reflect.Float64:
 		return float64Setter
+	case reflect.Slice:
+		if t.Elem().Kind() == reflect.Uint8 {
+			return bytesSetter
+		}
+		panic(fmt.Sprintf("no setter for slice type %s", t))
 	default:
 		panic(fmt.Sprintf("no setter for type %s", t))
 	}
@@ -127,6 +132,17 @@ func float64Setter(v reflect.Value, from sql.RawBytes) error {
 		return err
 	}
 	v.SetFloat(n)
+	return nil
+}
+
+func bytesSetter(v reflect.Value, from sql.RawBytes) error {
+	if from == nil {
+		v.SetBytes(nil)
+		return nil
+	}
+	cp := make([]byte, len(from))
+	copy(cp, from)
+	v.SetBytes(cp)
 	return nil
 }
 
