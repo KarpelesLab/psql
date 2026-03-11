@@ -160,13 +160,13 @@ func TestReadmeQueryBuilderExamples(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, `SELECT COUNT(*) FROM "users"`, sql)
 
-		// GROUP BY with aggregate (simulated with raw SQL)
+		// GROUP BY with aggregate and portable timestamp arithmetic
 		query = psql.B().Select("status", psql.Raw("COUNT(*) as count")).
 			From("users").
-			Where(psql.Raw("created_at > NOW() - INTERVAL '1 day'"))
+			Where(psql.Gt(psql.F("created_at"), psql.DateSub(psql.Now(), 24*time.Hour)))
 		sql, err = query.Render(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, `SELECT "status",COUNT(*) as count FROM "users" WHERE (created_at > NOW() - INTERVAL '1 day')`, sql)
+		assert.Equal(t, `SELECT "status",COUNT(*) as count FROM "users" WHERE ("created_at">NOW() - INTERVAL 1 DAY)`, sql)
 	})
 
 	t.Run("Complete Examples", func(t *testing.T) {

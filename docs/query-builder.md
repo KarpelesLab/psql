@@ -26,6 +26,9 @@ query := psql.B().Delete().From("users").Where(map[string]any{"id": 123})
 - `psql.V("value")` - Value literal
 - `psql.S("field", "ASC")` - Sort field with direction
 - `psql.Raw("SQL")` - Raw SQL (use carefully)
+- `psql.Now()` - Portable current timestamp
+- `psql.DateAdd(expr, duration)` - Add a `time.Duration` to a timestamp expression
+- `psql.DateSub(expr, duration)` - Subtract a `time.Duration` from a timestamp expression
 
 ## WHERE Conditions
 
@@ -194,6 +197,50 @@ query := psql.B().Insert().Into("users").
     Set(map[string]any{"id": 1, "name": "Alice"}).
     OnConflict("id").
     DoUpdate(map[string]any{"name": "Alice"})
+```
+
+## Portable Timestamp Arithmetic
+
+`Now()`, `DateAdd()`, and `DateSub()` generate engine-appropriate SQL for timestamp operations, so you never need to write raw `INTERVAL` expressions:
+
+```go
+// Portable NOW()
+psql.Now()
+// MySQL/PostgreSQL: NOW()
+// SQLite:           CURRENT_TIMESTAMP
+
+// Add a duration to a timestamp
+psql.DateAdd(psql.F("created_at"), 24*time.Hour)
+// MySQL:      "created_at" + INTERVAL 1 DAY
+// PostgreSQL: "created_at" + INTERVAL '1 day'
+// SQLite:     datetime("created_at",'+1 days')
+
+// Subtract a duration
+psql.DateSub(psql.Now(), 30*time.Minute)
+// MySQL:      NOW() - INTERVAL 30 MINUTE
+// PostgreSQL: NOW() - INTERVAL '30 minute'
+// SQLite:     datetime(CURRENT_TIMESTAMP,'-30 minutes')
+```
+
+Durations are automatically decomposed into the largest clean unit (day, hour, minute, second). Sub-second precision uses microseconds on MySQL/PostgreSQL.
+
+### Common Patterns
+
+```go
+// Records created in the last 24 hours
+query := psql.B().Select().From("events").
+    Where(psql.Gt(psql.F("created_at"), psql.DateSub(psql.Now(), 24*time.Hour)))
+
+// Sessions expiring within 2 hours
+query := psql.B().Select().From("sessions").
+    Where(psql.Lt(psql.F("expires_at"), psql.DateAdd(psql.Now(), 2*time.Hour)))
+
+// Deadline passed 1 hour ago
+query := psql.B().Select().From("tasks").
+    Where(psql.Lt(psql.DateAdd(psql.F("deadline"), 1*time.Hour), psql.Now()))
+
+// Use in SELECT to compute a future timestamp
+query := psql.B().Select("id", psql.DateAdd(psql.F("created_at"), 7*24*time.Hour)).From("events")
 ```
 
 ## SET Expressions (UPDATE)

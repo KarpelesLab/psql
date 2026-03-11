@@ -202,6 +202,19 @@ query := psql.B().
 rows, err := query.RunQuery(ctx)
 ```
 
+### Portable Timestamp Arithmetic
+
+Engine-aware date/time helpers that generate correct SQL for all backends:
+
+```go
+// Records created in the last 24 hours (works on MySQL, PostgreSQL, and SQLite)
+query := psql.B().Select().From("events").
+    Where(psql.Gt(psql.F("created_at"), psql.DateSub(psql.Now(), 24*time.Hour)))
+// MySQL:      "created_at">NOW() - INTERVAL 1 DAY
+// PostgreSQL: "created_at">NOW() - INTERVAL '1 day'
+// SQLite:     "created_at">datetime(CURRENT_TIMESTAMP,'-1 days')
+```
+
 ### Error Helpers
 
 ```go

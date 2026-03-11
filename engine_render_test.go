@@ -14,8 +14,8 @@ import (
 // (the real dialect is registered by psql-pgsql via init()).
 type testPgDialect struct{}
 
-func (testPgDialect) Placeholder(n int) string         { return "$" + strconv.Itoa(n) }
-func (testPgDialect) ExportArg(v any) any               { return psql.DefaultExportArg(v) }
+func (testPgDialect) Placeholder(n int) string { return "$" + strconv.Itoa(n) }
+func (testPgDialect) ExportArg(v any) any      { return psql.DefaultExportArg(v) }
 func (testPgDialect) LimitOffset(a, b int) string {
 	return "LIMIT " + strconv.Itoa(a) + " OFFSET " + strconv.Itoa(b)
 }
@@ -24,7 +24,7 @@ func (testPgDialect) LimitOffset(a, b int) string {
 type testSqliteDialect struct{}
 
 func (testSqliteDialect) Placeholder(_ int) string { return "?" }
-func (testSqliteDialect) ExportArg(v any) any       { return psql.DefaultExportArg(v) }
+func (testSqliteDialect) ExportArg(v any) any      { return psql.DefaultExportArg(v) }
 func (testSqliteDialect) LimitOffset(a, b int) string {
 	return "LIMIT " + strconv.Itoa(a) + " OFFSET " + strconv.Itoa(b)
 }
