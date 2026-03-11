@@ -72,7 +72,8 @@ func (t *TableMeta[T]) Insert(ctx context.Context, targets ...*T) error {
 
 		for n, f := range t.fields {
 			fval := val.Field(f.Index)
-			if fval.Kind() == reflect.Ptr {
+			switch fval.Kind() {
+			case reflect.Ptr, reflect.Slice, reflect.Map:
 				if fval.IsNil() {
 					continue
 				}
@@ -184,7 +185,8 @@ func (t *TableMeta[T]) InsertIgnore(ctx context.Context, targets ...*T) error {
 
 		for n, f := range t.fields {
 			fval := val.Field(f.Index)
-			if fval.Kind() == reflect.Ptr {
+			switch fval.Kind() {
+			case reflect.Ptr, reflect.Slice, reflect.Map:
 				if fval.IsNil() {
 					continue
 				}

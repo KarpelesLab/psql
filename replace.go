@@ -75,7 +75,8 @@ func (t *TableMeta[T]) Replace(ctx context.Context, targets ...*T) error {
 
 		for n, f := range t.fields {
 			fval := val.Field(f.Index)
-			if fval.Kind() == reflect.Ptr {
+			switch fval.Kind() {
+			case reflect.Ptr, reflect.Slice, reflect.Map:
 				if fval.IsNil() {
 					continue
 				}

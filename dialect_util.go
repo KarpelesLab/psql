@@ -30,11 +30,16 @@ func defaultExportArg(v any) any {
 		return v
 	default:
 		rv := reflect.ValueOf(v)
-		if rv.Type().Kind() == reflect.Ptr {
+		switch rv.Type().Kind() {
+		case reflect.Ptr:
 			if rv.IsNil() {
 				return nil
 			}
 			return defaultExportArg(rv.Elem().Interface())
+		case reflect.Slice, reflect.Map:
+			if rv.IsNil() {
+				return nil
+			}
 		}
 		return v
 	}

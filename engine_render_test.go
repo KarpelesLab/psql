@@ -458,3 +458,39 @@ func TestSubqueryJoinRenderArgsSQLite(t *testing.T) {
 	assert.Contains(t, sql, "?") // SQLite placeholder
 	assert.Len(t, args, 1)
 }
+
+// === Not in parameterized mode ===
+
+func TestNotRenderArgsMySQL(t *testing.T) {
+	ctx := ctxForEngine(psql.EngineMySQL)
+
+	query := psql.B().Select().From("users").
+		Where(map[string]any{"status": &psql.Not{V: "deleted"}})
+	sql, args, err := query.RenderArgs(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"status"!=?`)
+	assert.Equal(t, []any{"deleted"}, args)
+}
+
+func TestNotRenderArgsPG(t *testing.T) {
+	ctx := ctxForEngine(psql.EnginePostgreSQL)
+
+	query := psql.B().Select().From("users").
+		Where(map[string]any{"status": &psql.Not{V: "deleted"}})
+	sql, args, err := query.RenderArgs(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"status"!=$1`)
+	assert.Equal(t, []any{"deleted"}, args)
+}
+
+func TestNotInFilterArrayRenderArgs(t *testing.T) {
+	ctx := ctxForEngine(psql.EngineMySQL)
+
+	// Not used as a standalone expression in a filter array should expand, not become a bind param
+	query := psql.B().Select().From("tasks").
+		Where(map[string]any{"status": &psql.Not{V: nil}})
+	sql, args, err := query.RenderArgs(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, sql, `"status" IS NOT NULL`)
+	assert.Len(t, args, 0)
+}

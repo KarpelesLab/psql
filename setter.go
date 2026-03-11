@@ -59,7 +59,7 @@ func scanSetter(v reflect.Value, from sql.RawBytes) error {
 
 	intf := v.Interface().(sql.Scanner)
 
-	return intf.Scan(from)
+	return intf.Scan([]byte(from))
 }
 
 func boolSetter(v reflect.Value, from sql.RawBytes) error {

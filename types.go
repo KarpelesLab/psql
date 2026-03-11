@@ -56,3 +56,10 @@ func (n *Not) EscapeValue() string {
 	res += ")"
 	return res
 }
+
+func (n *Not) escapeValueCtx(ctx *renderContext) string {
+	res := "NOT ("
+	res += escapeCtx(ctx, n.V)
+	res += ")"
+	return res
+}
