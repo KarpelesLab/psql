@@ -2,6 +2,7 @@ package psql
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 )
@@ -73,7 +74,13 @@ func (t *TableMeta[T]) Update(ctx context.Context, target ...*T) error {
 					upd[f.Column] = &updatedField{f: f, v: newv}
 					continue
 				}
-				if !reflect.DeepEqual(newv, stv) {
+				if f.Attrs["format"] == "json" {
+					// State stores raw JSON string; compare by re-marshaling
+					newJSON, _ := json.Marshal(newv)
+					if string(newJSON) != stv {
+						upd[f.Column] = &updatedField{f: f, v: newv}
+					}
+				} else if !reflect.DeepEqual(newv, stv) {
 					upd[f.Column] = &updatedField{f: f, v: newv}
 				}
 			}

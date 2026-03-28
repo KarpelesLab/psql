@@ -370,16 +370,21 @@ func (t *TableMeta[T]) scanValue(ctx context.Context, rows *sql.Rows, target *T)
 			return fmt.Errorf("on field %s: %w", fld.Name, err)
 		}
 		if st != nil {
-			v := reflect.New(f.Type()).Elem()
-			vp := v
-			for vp.Kind() == reflect.Ptr {
-				if vp.IsNil() {
-					vp.Set(reflect.New(vp.Type().Elem()))
+			if fld.Attrs["format"] == "json" {
+				// Store raw JSON for state; DeepClone can't handle map[string]any
+				st.val[cols[i]] = string(values[i])
+			} else {
+				v := reflect.New(f.Type()).Elem()
+				vp := v
+				for vp.Kind() == reflect.Ptr {
+					if vp.IsNil() {
+						vp.Set(reflect.New(vp.Type().Elem()))
+					}
+					vp = vp.Elem()
 				}
-				vp = vp.Elem()
+				fld.setter(vp, values[i])
+				st.val[cols[i]] = typutil.DeepClone(v.Interface())
 			}
-			fld.setter(vp, values[i])
-			st.val[cols[i]] = typutil.DeepClone(v.Interface())
 		}
 	}
 
@@ -446,16 +451,20 @@ func (t *TableMeta[T]) scanValueReturning(ctx context.Context, rows *sql.Rows, t
 			return fmt.Errorf("on field %s: %w", fld.Name, err)
 		}
 		if st != nil {
-			v := reflect.New(f.Type()).Elem()
-			vp := v
-			for vp.Kind() == reflect.Ptr {
-				if vp.IsNil() {
-					vp.Set(reflect.New(vp.Type().Elem()))
+			if fld.Attrs["format"] == "json" {
+				st.val[cols[i]] = string(values[i])
+			} else {
+				v := reflect.New(f.Type()).Elem()
+				vp := v
+				for vp.Kind() == reflect.Ptr {
+					if vp.IsNil() {
+						vp.Set(reflect.New(vp.Type().Elem()))
+					}
+					vp = vp.Elem()
 				}
-				vp = vp.Elem()
+				fld.setter(vp, values[i])
+				st.val[cols[i]] = typutil.DeepClone(v.Interface())
 			}
-			fld.setter(vp, values[i])
-			st.val[cols[i]] = typutil.DeepClone(v.Interface())
 		}
 	}
 
