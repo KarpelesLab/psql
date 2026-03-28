@@ -174,11 +174,22 @@ func Table[T any]() *TableMeta[T] {
 			attrs["import"] = finfo.Type.String()
 		}
 
+		var setter func(reflect.Value, sql.RawBytes) error
+		if attrs["format"] == "json" {
+			t := finfo.Type
+			for t.Kind() == reflect.Ptr {
+				t = t.Elem()
+			}
+			setter = makeJSONSetter(t)
+		} else {
+			setter = findSetter(finfo.Type)
+		}
+
 		fld := &StructField{
 			Index:  i,
 			Name:   finfo.Name,
 			Column: col,
-			setter: findSetter(finfo.Type),
+			setter: setter,
 			Attrs:  attrs,
 			Rattrs: make(map[Engine]map[string]string),
 		}

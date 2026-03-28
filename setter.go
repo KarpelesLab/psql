@@ -3,6 +3,7 @@ package psql
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -144,6 +145,23 @@ func bytesSetter(v reflect.Value, from sql.RawBytes) error {
 	copy(cp, from)
 	v.SetBytes(cp)
 	return nil
+}
+
+// makeJSONSetter returns a setter that deserializes JSON from the database into
+// a Go value of the given type. Used for fields with format=json.
+func makeJSONSetter(t reflect.Type) func(v reflect.Value, from sql.RawBytes) error {
+	return func(v reflect.Value, from sql.RawBytes) error {
+		if len(from) == 0 {
+			v.Set(reflect.Zero(t))
+			return nil
+		}
+		ptr := reflect.New(t)
+		if err := json.Unmarshal(from, ptr.Interface()); err != nil {
+			return fmt.Errorf("json unmarshal: %w", err)
+		}
+		v.Set(ptr.Elem())
+		return nil
+	}
 }
 
 func timeSetter(v reflect.Value, from sql.RawBytes) error {
